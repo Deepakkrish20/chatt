@@ -6,11 +6,13 @@ import { AppIcon } from './AppIcon';
 export interface MessageComposerProps {
   onSendMessage?: (content: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export function MessageComposer({
   onSendMessage,
   placeholder = 'Encrypted message…',
+  disabled = false,
 }: MessageComposerProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const [text, setText] = useState('');
@@ -18,6 +20,7 @@ export function MessageComposer({
   const useNativeDriver = Platform.OS !== 'web';
 
   const handleSend = () => {
+    if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     onSendMessage?.(trimmed);
@@ -25,6 +28,7 @@ export function MessageComposer({
   };
 
   const handlePressIn = () => {
+    if (disabled) return;
     Animated.timing(buttonScale, {
       toValue: 0.9,
       duration: 80,
@@ -33,6 +37,7 @@ export function MessageComposer({
   };
 
   const handlePressOut = () => {
+    if (disabled) return;
     Animated.timing(buttonScale, {
       toValue: 1,
       duration: 100,
@@ -40,7 +45,7 @@ export function MessageComposer({
     }).start();
   };
 
-  const canSend = Boolean(text.trim());
+  const canSend = Boolean(text.trim()) && !disabled;
 
   return (
     <View
@@ -70,11 +75,12 @@ export function MessageComposer({
           onChangeText={setText}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
+          editable={!disabled}
           multiline
           style={[
             typography.body,
             styles.input,
-            { color: colors.text },
+            { color: disabled ? colors.textMuted : colors.text },
           ]}
         />
 

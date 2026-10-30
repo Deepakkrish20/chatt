@@ -8,6 +8,7 @@ This document defines the architectural baseline and technical foundation for **
 - **Module 2 (Completed)**: Established the **Raw Black Monochrome UI Foundation**, complete with design tokens, reusable UI primitives, and 5 fully navigable screens powered by local mock data.
 - **Module 3 (Completed)**: **UI Polish & Premium Experience** — Refined tactile animations, micro-interactions, responsive keyboard avoidance, pull-to-refresh, empty & error states, visual slot meters, and peer typing simulations.
 - **Module 4 (Completed)**: **Supabase & Secure Authentication** — Connected Supabase client with AsyncStorage session persistence, AuthContext, login/registration flows, Row-Level Security, and atomic database-enforced 10-member registration ceiling.
+- **Module 5 (Completed)**: **Private Real-Time Messaging** — 1:1 direct conversations with duplicate pair prevention (unique index on LEAST/GREATEST), server-validated message creation, chronological history, Supabase Realtime subscriptions, member discovery modal, and strict participant-only Row-Level Security.
 
 ---
 
@@ -110,6 +111,7 @@ The application is structured to add functional layers sequentially:
 * **Module 2 (Done)**: **Raw Black UI Foundation** — Centralized monochrome theme, reusable UI component library, 5 core screens, and local mock navigation.
 * **Module 3 (Done)**: **UI Polish & Premium Experience** — Subtle micro-animations, keyboard handling, auto-scroll, pull-to-refresh, typing simulation, and visual constraint indicators.
 * **Module 4 (Done)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
-* **Module 5 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
+* **Module 5 (Done)**: **Private Real-Time Messaging** — 1:1 direct conversations with duplicate pair prevention, server-validated message creation, chronological history, Supabase Realtime subscriptions, and participant-only RLS.
+* **Module 6 (Future)**: **Presence & Typing Simulation Enhancements** — Live participant presence indicators, typing broadcast channels, and media attachment groundwork.
 * **Module 6 (Future)**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
 * **Module 7 (Future)**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.

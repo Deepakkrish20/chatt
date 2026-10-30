@@ -11,6 +11,8 @@ export type IconName =
   | 'check'
   | 'check-all'
   | 'user'
+  | 'plus'
+  | 'close'
   | 'dot';
 
 export interface AppIconProps {
@@ -222,6 +224,56 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 borderWidth: 2,
                 borderBottomWidth: 0,
                 borderColor: iconColor,
+              }}
+            />
+          </View>
+        );
+
+      case 'plus':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                position: 'absolute',
+                width: size * 0.6,
+                height: 2,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                width: 2,
+                height: size * 0.6,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+              }}
+            />
+          </View>
+        );
+
+      case 'close':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                position: 'absolute',
+                width: size * 0.55,
+                height: 2,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+                transform: [{ rotate: '45deg' }],
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                width: size * 0.55,
+                height: 2,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+                transform: [{ rotate: '-45deg' }],
               }}
             />
           </View>

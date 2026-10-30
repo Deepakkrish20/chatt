@@ -21,11 +21,37 @@ export interface MemberCapacityResult {
   is_full: boolean;
 }
 
-export interface DatabaseDirectMessage {
+export interface DatabaseConversation {
   id: string;
+  user1_id: string;
+  user2_id: string;
+  last_message_text: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseMessage {
+  id: string;
+  conversation_id: string;
   sender_id: string;
-  recipient_id: string;
   content: string;
   created_at: string;
   read_at: string | null;
+}
+
+export interface ConversationParticipantProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isOnline: boolean;
+}
+
+export interface ConversationWithDetails {
+  id: string;
+  participant: ConversationParticipantProfile;
+  lastMessageText: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
 }

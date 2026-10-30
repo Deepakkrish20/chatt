@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, FlatList, Pressable, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  Modal,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -10,30 +18,74 @@ import {
   AppIcon,
   AppTextInput,
   AppButton,
+  AppAvatar,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
-import { MOCK_CONVERSATIONS, MOCK_NETWORK_STATUS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
+import {
+  fetchConversations,
+  fetchRegisteredMembers,
+  getOrCreateConversation,
+  subscribeToConversationsList,
+} from '@/lib/supabase';
+import { ConversationParticipantProfile } from '@/lib/supabase/types';
 import { DirectConversationPreview } from '@/types';
 
 export default function ChatListScreen() {
   const { colors, spacing, radius } = useAppTheme();
+  const { user, capacity, refreshCapacity } = useAuth();
+
+  const currentUserId = user?.id || '';
+
+  const [conversations, setConversations] = useState<DirectConversationPreview[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredConversations = MOCK_CONVERSATIONS.filter((conv) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      conv.participantName.toLowerCase().includes(query) ||
-      conv.lastMessageSnippet.toLowerCase().includes(query)
-    );
-  });
+  // New conversation modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [members, setMembers] = useState<ConversationParticipantProfile[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [createChatError, setCreateChatError] = useState('');
 
-  const handleRefresh = () => {
+  // Load conversations
+  const loadConversations = useCallback(async () => {
+    const list = await fetchConversations(currentUserId);
+    setConversations(list);
+    setIsLoading(false);
+  }, [currentUserId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchConversations(currentUserId).then((list) => {
+      if (isMounted) {
+        setConversations(list);
+        setIsLoading(false);
+      }
+    });
+
+    // Subscribe to live conversation updates
+    const unsubscribe = subscribeToConversationsList(currentUserId, () => {
+      fetchConversations(currentUserId).then((list) => {
+        if (isMounted) {
+          setConversations(list);
+        }
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [currentUserId]);
+
+  const handleRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 600);
+    await Promise.all([loadConversations(), refreshCapacity()]);
+    setRefreshing(false);
   };
 
   const handleOpenConversation = (conv: DirectConversationPreview) => {
@@ -43,30 +95,104 @@ export default function ChatListScreen() {
         id: conv.id,
         name: conv.participantName,
         online: conv.isOnline ? 'true' : 'false',
+        participantId: conv.participantId,
       },
     });
   };
 
+  // Open member picker modal
+  const handleOpenNewChatModal = async () => {
+    setIsModalOpen(true);
+    setIsLoadingMembers(true);
+    setCreateChatError('');
+    setMemberSearchQuery('');
+
+    const registered = await fetchRegisteredMembers(currentUserId);
+    setMembers(registered);
+    setIsLoadingMembers(false);
+  };
+
+  // Start or open 1:1 conversation with target member
+  const handleSelectMember = async (member: ConversationParticipantProfile) => {
+    if (isCreatingChat) return;
+
+    setIsCreatingChat(true);
+    setCreateChatError('');
+
+    const { conversationId, error } = await getOrCreateConversation(member.id);
+
+    setIsCreatingChat(false);
+
+    if (error || !conversationId) {
+      setCreateChatError(error || 'Failed to start conversation.');
+      return;
+    }
+
+    setIsModalOpen(false);
+    await loadConversations();
+
+    router.push({
+      pathname: '/chat/[id]',
+      params: {
+        id: conversationId,
+        name: member.displayName,
+        online: member.isOnline ? 'true' : 'false',
+        participantId: member.id,
+      },
+    });
+  };
+
+  // Filter conversations
+  const filteredConversations = conversations.filter((conv) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      conv.participantName.toLowerCase().includes(query) ||
+      conv.lastMessageSnippet.toLowerCase().includes(query)
+    );
+  });
+
+  // Filter members in modal
+  const filteredMembers = members.filter((m) => {
+    if (!memberSearchQuery.trim()) return true;
+    const q = memberSearchQuery.toLowerCase();
+    return m.displayName.toLowerCase().includes(q) || m.username.toLowerCase().includes(q);
+  });
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Top Header with Settings Action */}
+        {/* Top Header with New Chat & Settings Action */}
         <ScreenHeader
           title="Chats"
-          subtitle={`${MOCK_NETWORK_STATUS.activeMembers} of ${MOCK_NETWORK_STATUS.maxMembers} Members Active`}
+          subtitle={`${capacity.activeMembers} of ${capacity.maxMembers} Members Active`}
           rightElement={
-            <Pressable
-              hitSlop={12}
-              onPress={() => router.push('/settings')}
-              style={({ pressed }) => [
-                styles.headerAction,
-                { opacity: pressed ? 0.6 : 1 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Open settings"
-            >
-              <AppIcon name="settings" size={20} color={colors.text} />
-            </Pressable>
+            <View style={styles.headerActionsGroup}>
+              <Pressable
+                hitSlop={10}
+                onPress={handleOpenNewChatModal}
+                style={({ pressed }) => [
+                  styles.headerAction,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Start new conversation"
+              >
+                <AppIcon name="plus" size={18} color={colors.text} />
+              </Pressable>
+              <Pressable
+                hitSlop={10}
+                onPress={() => router.push('/settings')}
+                style={({ pressed }) => [
+                  styles.headerAction,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Open settings"
+              >
+                <AppIcon name="settings" size={18} color={colors.text} />
+              </Pressable>
+            </View>
           }
         />
 
@@ -83,16 +209,17 @@ export default function ChatListScreen() {
           ]}
         >
           <ThemedText variant="label" tone="muted">
-            CLOSED-CIRCLE NETWORK: {MOCK_NETWORK_STATUS.slotsRemaining} SLOTS AVAILABLE
+            CLOSED-CIRCLE NETWORK: {capacity.slotsRemaining} SLOTS AVAILABLE
           </ThemedText>
           <View style={styles.slotIndicators}>
-            {Array.from({ length: MOCK_NETWORK_STATUS.maxMembers }).map((_, i) => (
+            {Array.from({ length: capacity.maxMembers }).map((_, i) => (
               <View
                 key={i}
                 style={[
                   styles.slotDot,
                   {
-                    backgroundColor: i < MOCK_NETWORK_STATUS.activeMembers ? colors.text : 'transparent',
+                    backgroundColor:
+                      i < capacity.activeMembers ? colors.text : 'transparent',
                     borderColor: colors.textMuted,
                   },
                 ]}
@@ -102,7 +229,12 @@ export default function ChatListScreen() {
         </View>
 
         {/* Search Input Bar */}
-        <View style={[styles.searchContainer, { paddingHorizontal: spacing.md, paddingVertical: spacing.sm }]}>
+        <View
+          style={[
+            styles.searchContainer,
+            { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+          ]}
+        >
           <AppTextInput
             placeholder="Search conversations…"
             value={searchQuery}
@@ -113,61 +245,257 @@ export default function ChatListScreen() {
         </View>
 
         {/* Conversation List */}
-        <FlatList
-          data={filteredConversations}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ConversationItem
-              conversation={item}
-              onPress={() => handleOpenConversation(item)}
-            />
-          )}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.text}
-              colors={[colors.text]}
-              progressBackgroundColor={colors.surfaceSecondary}
-            />
-          }
-          ListEmptyComponent={
-            <View style={[styles.emptyContainer, { padding: spacing.xl }]}>
-              <View
-                style={[
-                  styles.emptyIconContainer,
-                  {
-                    backgroundColor: colors.surfaceSecondary,
-                    borderColor: colors.border,
-                    borderRadius: radius.full,
-                  },
-                ]}
-              >
-                <AppIcon name="search" size={24} color={colors.textMuted} />
-              </View>
-              <ThemedText variant="bodyMedium" tone="primary" style={{ textAlign: 'center', marginTop: spacing.md }}>
-                No Conversations Found
-              </ThemedText>
-              <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center', marginTop: 4, maxWidth: 260 }}>
-                {searchQuery
-                  ? `No peer conversations matching "${searchQuery}".`
-                  : 'No active direct messages.'}
-              </ThemedText>
-              {Boolean(searchQuery) ? (
+        {Boolean(isLoading) ? (
+          <View style={[styles.centeredLoading, { padding: spacing.xl }]}>
+            <ActivityIndicator size="small" color={colors.text} />
+            <ThemedText
+              variant="caption"
+              tone="muted"
+              style={{ marginTop: spacing.sm, textAlign: 'center' }}
+            >
+              Loading private channels…
+            </ThemedText>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredConversations}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <ConversationItem
+                conversation={item}
+                onPress={() => handleOpenConversation(item)}
+              />
+            )}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.text}
+                colors={[colors.text]}
+                progressBackgroundColor={colors.surfaceSecondary}
+              />
+            }
+            ListEmptyComponent={
+              <View style={[styles.emptyContainer, { padding: spacing.xl }]}>
+                <View
+                  style={[
+                    styles.emptyIconContainer,
+                    {
+                      backgroundColor: colors.surfaceSecondary,
+                      borderColor: colors.border,
+                      borderRadius: radius.full,
+                    },
+                  ]}
+                >
+                  <AppIcon name="search" size={24} color={colors.textMuted} />
+                </View>
+                <ThemedText
+                  variant="bodyMedium"
+                  tone="primary"
+                  style={{ textAlign: 'center', marginTop: spacing.md }}
+                >
+                  {Boolean(searchQuery)
+                    ? 'No Matching Conversations'
+                    : 'No Active Conversations'}
+                </ThemedText>
+                <ThemedText
+                  variant="caption"
+                  tone="secondary"
+                  style={{
+                    textAlign: 'center',
+                    marginTop: 4,
+                    maxWidth: 260,
+                  }}
+                >
+                  {Boolean(searchQuery)
+                    ? `No peer conversations matching "${searchQuery}".`
+                    : 'Start a private 1:1 conversation with any of the registered members.'}
+                </ThemedText>
                 <View style={{ marginTop: spacing.md }}>
-                  <AppButton
-                    title="Clear Search"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => setSearchQuery('')}
-                  />
+                  {Boolean(searchQuery) ? (
+                    <AppButton
+                      title="Clear Search"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => setSearchQuery('')}
+                    />
+                  ) : (
+                    <AppButton
+                      title="Start Conversation"
+                      variant="primary"
+                      size="sm"
+                      onPress={handleOpenNewChatModal}
+                    />
+                  )}
+                </View>
+              </View>
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+          />
+        )}
+
+        {/* Start New Conversation Modal */}
+        <Modal
+          visible={isModalOpen}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setIsModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                  borderRadius: radius.lg,
+                  padding: spacing.lg,
+                },
+              ]}
+            >
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <View>
+                  <ThemedText variant="h3" tone="primary">
+                    New Conversation
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                    Private 1:1 with registered member
+                  </ThemedText>
+                </View>
+                <Pressable
+                  hitSlop={12}
+                  onPress={() => setIsModalOpen(false)}
+                  style={({ pressed }) => [
+                    styles.modalCloseBtn,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close member selector"
+                >
+                  <AppIcon name="close" size={16} color={colors.text} />
+                </Pressable>
+              </View>
+
+              {/* Error Banner */}
+              {Boolean(createChatError) ? (
+                <View
+                  style={[
+                    styles.modalErrorBanner,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      padding: spacing.sm,
+                      borderRadius: radius.sm,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
+                    {createChatError}
+                  </ThemedText>
                 </View>
               ) : null}
+
+              {/* Member Search Bar */}
+              <View style={{ marginTop: spacing.md }}>
+                <AppTextInput
+                  placeholder="Filter members…"
+                  value={memberSearchQuery}
+                  onChangeText={setMemberSearchQuery}
+                  onClear={() => setMemberSearchQuery('')}
+                  containerStyle={{ marginBottom: spacing.sm }}
+                />
+              </View>
+
+              {/* Members List */}
+              {Boolean(isLoadingMembers) ? (
+                <View style={[styles.centeredLoading, { padding: spacing.xl }]}>
+                  <ActivityIndicator size="small" color={colors.text} />
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredMembers}
+                  keyExtractor={(item) => item.id}
+                  style={styles.membersList}
+                  renderItem={({ item }) => {
+                    const existingConv = conversations.find(
+                      (c) => c.participantId === item.id
+                    );
+
+                    return (
+                      <Pressable
+                        onPress={() => handleSelectMember(item)}
+                        disabled={isCreatingChat}
+                        style={({ pressed }) => [
+                          styles.memberRow,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: pressed
+                              ? colors.surfaceSecondary
+                              : 'transparent',
+                            borderRadius: radius.md,
+                            padding: spacing.sm,
+                          },
+                        ]}
+                      >
+                        <AppAvatar
+                          name={item.displayName}
+                          size="md"
+                          isOnline={item.isOnline}
+                        />
+                        <View style={styles.memberInfo}>
+                          <ThemedText variant="bodyMedium" tone="primary" numberOfLines={1}>
+                            {item.displayName}
+                          </ThemedText>
+                          <ThemedText variant="caption" tone="muted" numberOfLines={1}>
+                            @{item.username}
+                          </ThemedText>
+                        </View>
+                        {Boolean(existingConv) ? (
+                          <View
+                            style={[
+                              styles.activeBadge,
+                              {
+                                borderColor: colors.border,
+                                backgroundColor: colors.surfaceSecondary,
+                                borderRadius: radius.xs,
+                              },
+                            ]}
+                          >
+                            <ThemedText variant="label" tone="muted">
+                              OPEN
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  }}
+                  ListEmptyComponent={
+                    <View style={{ padding: spacing.lg, alignItems: 'center' }}>
+                      <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
+                        {Boolean(memberSearchQuery)
+                          ? 'No matching members found.'
+                          : 'No other registered members found.'}
+                      </ThemedText>
+                      <ThemedText
+                        variant="caption"
+                        tone="muted"
+                        style={{ textAlign: 'center', marginTop: 4, maxWidth: 240 }}
+                      >
+                        Up to 10 registered members can participate in this closed circle.
+                      </ThemedText>
+                    </View>
+                  }
+                />
+              )}
             </View>
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-        />
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
   );
@@ -180,9 +508,14 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  headerActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   headerAction: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -211,6 +544,10 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
   },
+  centeredLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,5 +559,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 440,
+    maxHeight: '80%',
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalErrorBanner: {
+    marginTop: 12,
+    borderWidth: 1,
+  },
+  membersList: {
+    maxHeight: 280,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    borderWidth: 1,
+  },
+  memberInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  activeBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
 });

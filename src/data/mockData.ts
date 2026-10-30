@@ -9,6 +9,42 @@ export const CURRENT_USER: UserSummary = {
   createdAt: '2026-01-15T00:00:00Z',
 };
 
+export const MOCK_MEMBERS: UserSummary[] = [
+  CURRENT_USER,
+  {
+    id: 'user_elena',
+    username: 'elena_r',
+    displayName: 'Elena Rostova',
+    isOnline: true,
+    statusText: 'Verified Peer',
+    createdAt: '2026-01-16T00:00:00Z',
+  },
+  {
+    id: 'user_marcus',
+    username: 'marcus_t',
+    displayName: 'Marcus Thorne',
+    isOnline: false,
+    statusText: 'Offline',
+    createdAt: '2026-01-17T00:00:00Z',
+  },
+  {
+    id: 'user_maya',
+    username: 'maya_l',
+    displayName: 'Maya Lin',
+    isOnline: true,
+    statusText: 'Active',
+    createdAt: '2026-01-18T00:00:00Z',
+  },
+  {
+    id: 'user_julian',
+    username: 'julian_c',
+    displayName: 'Julian Croft',
+    isOnline: false,
+    statusText: 'Offline',
+    createdAt: '2026-01-19T00:00:00Z',
+  },
+];
+
 export const MOCK_CONVERSATIONS: DirectConversationPreview[] = [
   {
     id: 'conv_1',

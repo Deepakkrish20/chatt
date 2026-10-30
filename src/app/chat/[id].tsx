@@ -5,6 +5,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -18,85 +20,154 @@ import {
   AppIcon,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
-import { MOCK_MESSAGES, MOCK_CONVERSATIONS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
+import {
+  fetchMessages,
+  sendDirectMessage,
+  subscribeToConversationMessages,
+  markConversationAsRead,
+  isSupabaseConfigured,
+} from '@/lib/supabase';
+import { MOCK_CONVERSATIONS } from '@/data/mockData';
 import { DirectMessage } from '@/types';
 
 export default function PrivateChatScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const params = useLocalSearchParams<{ id: string; name?: string; online?: string }>();
-  const conversationId = params.id || 'conv_1';
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{
+    id: string;
+    name?: string;
+    online?: string;
+    participantId?: string;
+  }>();
 
-  // Find conversation metadata
+  const conversationId = params.id || 'conv_1';
+  const currentUserId = user?.id || '';
+
+  // Resolve metadata
   const conversationMeta = MOCK_CONVERSATIONS.find((c) => c.id === conversationId);
-  const participantName = params.name || conversationMeta?.participantName || 'Elena Rostova';
+  const participantName = params.name || conversationMeta?.participantName || 'Peer Member';
   const isOnline = params.online === 'true' || conversationMeta?.isOnline || false;
 
-  const initialMessages = MOCK_MESSAGES[conversationId] || [
-    {
-      id: 'default_1',
-      conversationId,
-      senderId: 'contact',
-      senderName: participantName,
-      content: 'Private channel opened. End-to-end device isolation active.',
-      createdAt: '10:00 AM',
-      isOutgoing: false,
-      status: 'read',
-    },
-  ];
-
-  const [messages, setMessages] = useState<DirectMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<DirectMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const flatListRef = useRef<FlatList<DirectMessage>>(null);
 
-  // Auto scroll to bottom when messages update
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchMessages(conversationId, currentUserId, participantName).then((history) => {
+      if (isMounted) {
+        setMessages(history);
+        setIsLoading(false);
+        markConversationAsRead(conversationId);
+      }
+    });
+
+    // Subscribe to live incoming messages
+    const unsubscribe = subscribeToConversationMessages(
+      conversationId,
+      currentUserId,
+      participantName,
+      (newMsg) => {
+        if (!isMounted) return;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id)) {
+            return prev;
+          }
+          return [...prev, newMsg];
+        });
+        markConversationAsRead(conversationId);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [conversationId, currentUserId, participantName]);
+
+  // Auto scroll to bottom on message update
   useEffect(() => {
     const timer = setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    }, 120);
     return () => clearTimeout(timer);
-  }, [messages, isPeerTyping]);
+  }, [messages.length, isPeerTyping]);
 
-  const handleSendMessage = (content: string) => {
-    const newMessage: DirectMessage = {
-      id: `m_local_${Date.now()}`,
+  const handleSendMessage = async (content: string) => {
+    if (isSending || !content.trim()) return;
+
+    setIsSending(true);
+    setSendError(null);
+
+    // Optimistic local representation
+    const tempId = `temp_${Date.now()}`;
+    const optimisticMsg: DirectMessage = {
+      id: tempId,
       conversationId,
-      senderId: 'user_current',
-      senderName: 'Alex Vance',
-      content,
+      senderId: currentUserId || 'user_current',
+      senderName: 'You',
+      content: content.trim(),
       createdAt: 'Just now',
       isOutgoing: true,
-      status: 'delivered',
+      status: 'sent',
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [...prev, optimisticMsg]);
 
-    // Simulate gentle mock reply from peer after a brief pause
-    setTimeout(() => {
-      setIsPeerTyping(true);
+    const { data, error } = await sendDirectMessage(
+      conversationId,
+      content,
+      currentUserId
+    );
+
+    setIsSending(false);
+
+    if (error) {
+      setSendError(error);
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      return;
+    }
+
+    if (data) {
+      // Replace optimistic entry with server-confirmed message
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? data : m))
+      );
+    }
+
+    // In local demo mode (when Supabase is unconfigured), simulate peer reply
+    if (!isSupabaseConfigured) {
       setTimeout(() => {
-        setIsPeerTyping(false);
-        const replyResponses = [
-          'Acknowledged. Verified on isolated node.',
-          'Understood. Standing by for updates.',
-          'Encrypted payload received. Checking parameters now.',
-          'Copy that. Channel remains clear.',
-        ];
-        const randomReply =
-          replyResponses[Math.floor(Math.random() * replyResponses.length)];
-
-        const replyMessage: DirectMessage = {
-          id: `m_reply_${Date.now()}`,
-          conversationId,
-          senderId: 'peer',
-          senderName: participantName,
-          content: randomReply,
-          createdAt: 'Just now',
-          isOutgoing: false,
-          status: 'read',
-        };
-        setMessages((prev) => [...prev, replyMessage]);
-      }, 1200);
-    }, 800);
+        setIsPeerTyping(true);
+        setTimeout(() => {
+          setIsPeerTyping(false);
+          const replies = [
+            'Acknowledged. Verified on isolated node.',
+            'Understood. Standing by for updates.',
+            'Encrypted payload received. Checking parameters now.',
+            'Copy that. Channel remains clear.',
+          ];
+          const randomReply = replies[Math.floor(Math.random() * replies.length)];
+          const replyMessage: DirectMessage = {
+            id: `m_reply_${Date.now()}`,
+            conversationId,
+            senderId: 'peer',
+            senderName: participantName,
+            content: randomReply,
+            createdAt: 'Just now',
+            isOutgoing: false,
+            status: 'read',
+          };
+          setMessages((prev) => [...prev, replyMessage]);
+        }, 1200);
+      }, 800);
+    }
   };
 
   return (
@@ -140,6 +211,28 @@ export default function PrivateChatScreen() {
           </ThemedText>
         </View>
 
+        {/* Send Error Banner */}
+        {Boolean(sendError) ? (
+          <View
+            style={[
+              styles.errorBanner,
+              {
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs + 2,
+              },
+            ]}
+          >
+            <ThemedText variant="caption" tone="primary" style={{ flex: 1 }}>
+              {sendError}
+            </ThemedText>
+            <Pressable onPress={() => setSendError(null)} hitSlop={8}>
+              <AppIcon name="close" size={14} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Keyboard Avoiding Container */}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -147,48 +240,66 @@ export default function PrivateChatScreen() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
           {/* Message Thread */}
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                animate={item.id.startsWith('m_local_') || item.id.startsWith('m_reply_')}
-              />
-            )}
-            contentContainerStyle={[
-              styles.messageList,
-              { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-            ]}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={[styles.emptyContainer, { padding: spacing.xl }]}>
-                <View
-                  style={[
-                    styles.emptyIconBox,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceSecondary,
-                      borderRadius: radius.full,
-                    },
-                  ]}
-                >
-                  <AppIcon name="lock" size={24} color={colors.text} />
+          {Boolean(isLoading) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.text} />
+              <ThemedText
+                variant="caption"
+                tone="muted"
+                style={{ marginTop: spacing.sm }}
+              >
+                Retrieving isolated messages…
+              </ThemedText>
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <MessageBubble
+                  message={item}
+                  animate={item.id.startsWith('temp_') || item.id.startsWith('m_reply_')}
+                />
+              )}
+              contentContainerStyle={[
+                styles.messageList,
+                { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+              ]}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={[styles.emptyContainer, { padding: spacing.xl }]}>
+                  <View
+                    style={[
+                      styles.emptyIconBox,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceSecondary,
+                        borderRadius: radius.full,
+                      },
+                    ]}
+                  >
+                    <AppIcon name="lock" size={24} color={colors.text} />
+                  </View>
+                  <ThemedText variant="bodyMedium" style={{ marginTop: spacing.md }}>
+                    No messages yet
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: 4 }}>
+                    Send a private message to open this direct channel.
+                  </ThemedText>
                 </View>
-                <ThemedText variant="bodyMedium" style={{ marginTop: spacing.md }}>
-                  No messages yet
-                </ThemedText>
-                <ThemedText variant="caption" tone="secondary" style={{ marginTop: 4 }}>
-                  Send an encrypted message to open communication.
-                </ThemedText>
-              </View>
-            }
-          />
+              }
+            />
+          )}
 
           {/* Peer Typing Indicator */}
-          {isPeerTyping ? (
-            <View style={[styles.typingRow, { paddingHorizontal: spacing.md, marginBottom: spacing.xs }]}>
+          {Boolean(isPeerTyping) ? (
+            <View
+              style={[
+                styles.typingRow,
+                { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
+              ]}
+            >
               <View
                 style={[
                   styles.typingBubble,
@@ -209,7 +320,7 @@ export default function PrivateChatScreen() {
           ) : null}
 
           {/* Message Composer */}
-          <MessageComposer onSendMessage={handleSendMessage} />
+          <MessageComposer onSendMessage={handleSendMessage} disabled={isSending} />
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
@@ -228,8 +339,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+  },
   keyboardContainer: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   messageList: {
     flexGrow: 1,
