@@ -28,7 +28,6 @@ export default function RegisterScreen() {
 
   // Step 2: Verification Code
   const [otpCode, setOtpCode] = useState('');
-  const [demoCodeHint, setDemoCodeHint] = useState<string | null>(null);
 
   // Step 3: Password Setup
   const [password, setPassword] = useState('');
@@ -76,9 +75,6 @@ export default function RegisterScreen() {
     if (result.error) {
       setGeneralError(result.error);
     } else {
-      if (result.demoCode) {
-        setDemoCodeHint(result.demoCode);
-      }
       setStep('verify_otp');
     }
   };
@@ -253,25 +249,6 @@ export default function RegisterScreen() {
                 >
                   <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
                     {generalError}
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {/* Demo OTP Notice (when Supabase is unconfigured) */}
-              {Boolean(demoCodeHint) && step === 'verify_otp' ? (
-                <View
-                  style={[
-                    styles.bannerBox,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceSecondary,
-                      borderRadius: radius.md,
-                      padding: spacing.sm + 2,
-                    },
-                  ]}
-                >
-                  <ThemedText variant="label" tone="muted" style={{ textAlign: 'center' }}>
-                    DEMO OTP CODE: {demoCodeHint}
                   </ThemedText>
                 </View>
               ) : null}

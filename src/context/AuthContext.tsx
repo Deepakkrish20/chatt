@@ -31,7 +31,7 @@ interface AuthContextType {
   refreshCapacity: () => Promise<void>;
   recordActivity: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  requestEmailOtp: (email: string) => Promise<{ error: string | null; demoCode?: string }>;
+  requestEmailOtp: (email: string) => Promise<{ error: string | null }>;
   verifyEmailOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   setPasswordAndProfile: (
     password: string,
@@ -343,46 +343,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 2. Registration Step 1: Send Verification OTP to Email
+  // 2. Registration Step 1: Send Real Verification OTP to Email
   const requestEmailOtp = async (
     email: string
-  ): Promise<{ error: string | null; demoCode?: string }> => {
+  ): Promise<{ error: string | null }> => {
     const cleanEmail = email.trim().toLowerCase();
 
-    // Verify 10-member capacity before sending code
-    if (isSupabaseConfigured) {
-      try {
-        const { data: capData } = await supabase.rpc('get_member_capacity');
-        if (capData && (capData as MemberCapacityResult).is_full) {
-          return {
-            error: 'Registration closed: The maximum network capacity of 10 registered members has been reached.',
-          };
-        }
-      } catch {
-        // Trigger will enforce atomically on insert
-      }
+    if (!isSupabaseConfigured) {
+      return {
+        error:
+          'Real email dispatch requires Supabase credentials. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env to send real codes to inboxes.',
+      };
+    }
 
-      try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: cleanEmail,
-          options: {
-            shouldCreateUser: true,
-          },
-        });
-
-        if (error) {
-          return { error: error.message };
-        }
-
-        return { error: null };
-      } catch (err: unknown) {
+    try {
+      const { data: capData } = await supabase.rpc('get_member_capacity');
+      if (capData && (capData as MemberCapacityResult).is_full) {
         return {
-          error: err instanceof Error ? err.message : 'Failed to send verification code.',
+          error: 'Registration closed: The maximum network capacity of 10 registered members has been reached.',
         };
       }
-    } else {
-      // Local demo mode OTP simulation
-      return { error: null, demoCode: '123456' };
+    } catch {
+      // Trigger will enforce atomically on insert
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return { error: null };
+    } catch (err: unknown) {
+      return {
+        error: err instanceof Error ? err.message : 'Failed to send verification code.',
+      };
     }
   };
 
@@ -395,10 +396,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanToken = token.trim();
 
     if (!isSupabaseConfigured) {
-      if (cleanToken === '123456' || cleanToken.length === 6) {
-        return { error: null };
-      }
-      return { error: 'Invalid verification code. Enter 123456 for demo verification.' };
+      return {
+        error: 'Supabase credentials required in .env to verify codes.',
+      };
     }
 
     try {
