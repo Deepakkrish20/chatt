@@ -1,10 +1,7 @@
 /**
- * Supabase Database Schema types placeholder.
+ * Supabase Database Schema types.
  *
- * This file will be populated in future modules with generated or custom
- * database definitions (profiles, direct_messages, conversations).
- *
- * Hardcoded limit: Maximum of 10 registered members.
+ * Hardcoded Limit: Maximum of 10 registered members.
  */
 
 export interface DatabaseProfile {
@@ -12,9 +9,16 @@ export interface DatabaseProfile {
   username: string;
   display_name: string;
   avatar_url: string | null;
-  status: 'online' | 'offline' | 'away';
+  status?: 'online' | 'offline' | 'away';
   created_at: string;
   updated_at: string;
+}
+
+export interface MemberCapacityResult {
+  active_members: number;
+  max_members: number;
+  slots_remaining: number;
+  is_full: boolean;
 }
 
 export interface DatabaseDirectMessage {

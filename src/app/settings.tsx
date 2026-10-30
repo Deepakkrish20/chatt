@@ -11,10 +11,12 @@ import {
   AppButton,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
-import { CURRENT_USER, MOCK_NETWORK_STATUS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
+import { CURRENT_USER } from '@/data/mockData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
+  const { user, profile, signOut, capacity, isConfigured } = useAuth();
 
   // Appearance & Privacy settings UI state
   const [highContrastBorders, setHighContrastBorders] = useState(true);
@@ -22,7 +24,12 @@ export default function SettingsScreen() {
   const [offlineNotifications, setOfflineNotifications] = useState(false);
   const [showSignOutPrompt, setShowSignOutPrompt] = useState(false);
 
-  const handleSignOut = () => {
+  const displayName = profile?.display_name || user?.user_metadata?.displayName || CURRENT_USER.displayName;
+  const username = profile?.username || user?.user_metadata?.username || CURRENT_USER.username;
+  const email = user?.email || 'alex@private.chat';
+
+  const handleSignOut = async () => {
+    await signOut();
     router.replace('/');
   };
 
@@ -47,16 +54,19 @@ export default function SettingsScreen() {
           <AppCard style={styles.profileCard}>
             <View style={styles.profileRow}>
               <AppAvatar
-                name={CURRENT_USER.displayName}
+                name={displayName}
                 size="lg"
-                isOnline={CURRENT_USER.isOnline}
+                isOnline={true}
                 style={{ marginRight: spacing.md }}
               />
 
               <View style={styles.profileInfo}>
-                <ThemedText variant="h2">{CURRENT_USER.displayName}</ThemedText>
+                <ThemedText variant="h2">{displayName}</ThemedText>
                 <ThemedText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
-                  @{CURRENT_USER.username}
+                  @{username}
+                </ThemedText>
+                <ThemedText variant="caption" tone="muted" style={{ marginTop: 1, fontSize: 11 }}>
+                  {email}
                 </ThemedText>
                 <View
                   style={[
@@ -70,7 +80,7 @@ export default function SettingsScreen() {
                   ]}
                 >
                   <ThemedText variant="label" tone="primary" style={{ fontSize: 10 }}>
-                    MEMBER 1 OF {MOCK_NETWORK_STATUS.maxMembers} • VERIFIED
+                    {isConfigured ? 'AUTHENTICATED MEMBER • VERIFIED' : 'DEMO MEMBER • LOCAL ACTIVE'}
                   </ThemedText>
                 </View>
               </View>
@@ -84,23 +94,23 @@ export default function SettingsScreen() {
                 NETWORK CAPACITY
               </ThemedText>
               <ThemedText variant="label" tone="muted">
-                {MOCK_NETWORK_STATUS.slotsRemaining} SLOTS FREE
+                {capacity.slotsRemaining} SLOTS FREE
               </ThemedText>
             </View>
 
             <View style={[styles.networkStatusRow, { marginTop: spacing.xs + 2 }]}>
               <ThemedText variant="bodySemibold">
-                {MOCK_NETWORK_STATUS.activeMembers} of {MOCK_NETWORK_STATUS.maxMembers} Accounts Claimed
+                {capacity.activeMembers} of {capacity.maxMembers} Accounts Claimed
               </ThemedText>
 
               <View style={styles.slotDots}>
-                {Array.from({ length: MOCK_NETWORK_STATUS.maxMembers }).map((_, i) => (
+                {Array.from({ length: capacity.maxMembers }).map((_, i) => (
                   <View
                     key={i}
                     style={[
                       styles.slotDot,
                       {
-                        backgroundColor: i < MOCK_NETWORK_STATUS.activeMembers ? colors.text : 'transparent',
+                        backgroundColor: i < capacity.activeMembers ? colors.text : 'transparent',
                         borderColor: colors.textMuted,
                       },
                     ]}
@@ -110,7 +120,7 @@ export default function SettingsScreen() {
             </View>
 
             <ThemedText variant="caption" tone="secondary" style={{ marginTop: spacing.sm }}>
-              This private instance enforces a strict ceiling of {MOCK_NETWORK_STATUS.maxMembers} registered accounts.
+              This private instance enforces a strict ceiling of {capacity.maxMembers} registered accounts.
               Only direct 1:1 messaging is permitted; group chats are disabled.
             </ThemedText>
           </AppCard>
@@ -215,7 +225,7 @@ export default function SettingsScreen() {
                   Confirm Sign Out?
                 </ThemedText>
                 <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
-                  You will return to the Welcome screen. Local session data remains encrypted.
+                  You will return to the Welcome screen.
                 </ThemedText>
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: 4 }}>
                   <View style={{ flex: 1 }}>

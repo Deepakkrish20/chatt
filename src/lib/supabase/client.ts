@@ -1,37 +1,31 @@
-/**
- * Supabase Client Skeleton / Future Integration Placeholder.
- *
- * NOTE: Authentication and database integration are NOT implemented in Module 1.
- * This client provides the environment validation and configuration interface
- * to be wired up with @supabase/supabase-js in Module 3.
- *
- * Requirements:
- * - Credentials must always be injected via environment variables (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY).
- * - No real keys, passwords, or active network connections exist in source control.
- */
+import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-export interface SupabaseConfig {
-  url: string | null;
-  anonKey: string | null;
-  isConfigured: boolean;
-}
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export function getSupabaseConfig(): SupabaseConfig {
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? null;
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null;
-
-  return {
-    url,
-    anonKey,
-    isConfigured: Boolean(url && anonKey),
-  };
-}
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('your-project-ref') &&
+  !supabaseAnonKey.includes('your-anon-key')
+);
 
 /**
- * Placeholder client instance for Module 1.
- * Real Supabase client initialization will be introduced in Module 3.
+ * Supabase client configured for Expo and React Native.
+ * Uses AsyncStorage for mobile session persistence and token caching.
+ * On Web, uses window.localStorage automatically.
  */
-export const supabaseClientPlaceholder = {
-  isReady: false,
-  description: 'Supabase client placeholder for Chatt Module 1',
-};
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder-chatt.supabase.co',
+  supabaseAnonKey || 'placeholder-anon-key',
+  {
+    auth: {
+      storage: Platform.OS === 'web' ? undefined : AsyncStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
+);

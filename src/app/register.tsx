@@ -11,29 +11,33 @@ import {
   AppCard,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
-import { MAX_REGISTERED_MEMBERS } from '@/types';
-import { MOCK_NETWORK_STATUS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
 
 export default function RegisterScreen() {
   const { colors, spacing, radius } = useAppTheme();
+  const { signUp, capacity } = useAuth();
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    setGeneralError('');
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) {
       newErrors.name = 'Full name is required';
     }
 
-    if (!email.trim()) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
       newErrors.email = 'Email address is required';
-    } else if (!email.includes('@')) {
+    } else if (!cleanEmail.includes('@')) {
       newErrors.email = 'Enter a valid email format';
     }
 
@@ -55,10 +59,14 @@ export default function RegisterScreen() {
     setErrors({});
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    const result = await signUp(cleanEmail, password, name.trim());
+    setIsLoading(false);
+
+    if (result.error) {
+      setGeneralError(result.error);
+    } else {
       router.push('/chats');
-    }, 400);
+    }
   };
 
   return (
@@ -66,7 +74,11 @@ export default function RegisterScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title="Create Account"
-          subtitle={`Slot Available (${MOCK_NETWORK_STATUS.activeMembers} of ${MOCK_NETWORK_STATUS.maxMembers} claimed)`}
+          subtitle={
+            capacity.isFull
+              ? 'Registration Closed (All 10 slots filled)'
+              : `Slot Available (${capacity.activeMembers} of ${capacity.maxMembers} claimed)`
+          }
           showBack
           onBack={() => router.back()}
         />
@@ -88,8 +100,48 @@ export default function RegisterScreen() {
                 Member Registration
               </ThemedText>
               <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                Membership is strictly restricted to {MAX_REGISTERED_MEMBERS} verified participants.
+                Membership is strictly restricted to {capacity.maxMembers} verified participants.
               </ThemedText>
+
+              {capacity.isFull ? (
+                <View
+                  style={[
+                    styles.fullCapacityBanner,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderRadius: radius.md,
+                      padding: spacing.md,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="label" tone="primary" style={{ textAlign: 'center', marginBottom: 4 }}>
+                    NETWORK AT MAXIMUM CAPACITY (10/10)
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
+                    All 10 private member slots have been registered. New account creation is
+                    atomically blocked by the database.
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {Boolean(generalError) ? (
+                <View
+                  style={[
+                    styles.errorBanner,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderRadius: radius.md,
+                      padding: spacing.sm + 2,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
+                    {generalError}
+                  </ThemedText>
+                </View>
+              ) : null}
 
               <AppTextInput
                 label="Full Name"
@@ -102,6 +154,7 @@ export default function RegisterScreen() {
                 error={errors.name}
                 autoCapitalize="words"
                 onClear={() => setName('')}
+                editable={!capacity.isFull}
               />
 
               <AppTextInput
@@ -117,6 +170,7 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 onClear={() => setEmail('')}
+                editable={!capacity.isFull}
               />
 
               <AppTextInput
@@ -129,6 +183,7 @@ export default function RegisterScreen() {
                 }}
                 error={errors.password}
                 isPassword
+                editable={!capacity.isFull}
               />
 
               <AppTextInput
@@ -141,13 +196,15 @@ export default function RegisterScreen() {
                 }}
                 error={errors.confirmPassword}
                 isPassword
+                editable={!capacity.isFull}
               />
 
               <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
                 <AppButton
-                  title="Complete Registration"
+                  title={capacity.isFull ? 'Registration Locked' : 'Complete Registration'}
                   variant="primary"
                   loading={isLoading}
+                  disabled={capacity.isFull}
                   onPress={handleRegister}
                 />
 
@@ -172,11 +229,11 @@ export default function RegisterScreen() {
               ]}
             >
               <ThemedText variant="label" tone="muted" style={{ marginBottom: 4 }}>
-                ZERO-METADATA POLICY
+                ZERO-METADATA & HARD-LIMIT POLICY
               </ThemedText>
               <ThemedText variant="caption" tone="secondary">
-                No phone number or contact synchronisation required. All communications are
-                isolated directly between the sender and recipient.
+                No phone number or contact synchronisation required. The 10-member ceiling is
+                atomically enforced at the database level with transaction isolation locks.
               </ThemedText>
             </View>
           </ScrollView>
@@ -204,6 +261,12 @@ const styles = StyleSheet.create({
   },
   formCard: {
     width: '100%',
+  },
+  fullCapacityBanner: {
+    borderWidth: 1,
+  },
+  errorBanner: {
+    borderWidth: 1,
   },
   infoBox: {
     borderWidth: 1,

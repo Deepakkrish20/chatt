@@ -7,6 +7,7 @@ This document defines the architectural baseline and technical foundation for **
 - **Module 1 (Completed)**: Initialized the baseline project repository, strict TypeScript typing, Expo Router configuration, theme foundations, and empty Supabase placeholders.
 - **Module 2 (Completed)**: Established the **Raw Black Monochrome UI Foundation**, complete with design tokens, reusable UI primitives, and 5 fully navigable screens powered by local mock data.
 - **Module 3 (Completed)**: **UI Polish & Premium Experience** — Refined tactile animations, micro-interactions, responsive keyboard avoidance, pull-to-refresh, empty & error states, visual slot meters, and peer typing simulations.
+- **Module 4 (Completed)**: **Supabase & Secure Authentication** — Connected Supabase client with AsyncStorage session persistence, AuthContext, login/registration flows, Row-Level Security, and atomic database-enforced 10-member registration ceiling.
 
 ---
 
@@ -108,7 +109,7 @@ The application is structured to add functional layers sequentially:
 * **Module 1 (Done)**: **Project Foundation Setup** — Repository initialization, Expo Router configuration, TypeScript contracts, Theme foundation, Supabase scaffolding, and verification.
 * **Module 2 (Done)**: **Raw Black UI Foundation** — Centralized monochrome theme, reusable UI component library, 5 core screens, and local mock navigation.
 * **Module 3 (Done)**: **UI Polish & Premium Experience** — Subtle micro-animations, keyboard handling, auto-scroll, pull-to-refresh, typing simulation, and visual constraint indicators.
-* **Module 4 (Future)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
-* **Module 5 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`profiles`, `conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
+* **Module 4 (Done)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
+* **Module 5 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
 * **Module 6 (Future)**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
 * **Module 7 (Future)**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.

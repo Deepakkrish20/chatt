@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,31 +11,42 @@ import {
   AppCard,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
-import { MAX_REGISTERED_MEMBERS } from '@/types';
-import { MOCK_NETWORK_STATUS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
 
 export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const [email, setEmail] = useState('alex@private.chat');
-  const [password, setPassword] = useState('••••••••••••');
+  const { user, signIn, capacity, isConfigured, isLoading: isAuthRestoring } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignIn = () => {
+  // If already authenticated via session restoration, offer quick resume
+  useEffect(() => {
+    if (user && !isLoading) {
+      router.replace('/chats');
+    }
+  }, [user, isLoading]);
+
+  const handleSignIn = async () => {
     let hasError = false;
     setEmailError('');
     setPasswordError('');
+    setAuthError('');
 
-    if (!email.trim()) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
       setEmailError('Email address is required');
       hasError = true;
-    } else if (!email.includes('@')) {
+    } else if (!cleanEmail.includes('@')) {
       setEmailError('Enter a valid email format');
       hasError = true;
     }
 
-    if (!password.trim()) {
+    if (!password) {
       setPasswordError('Password is required');
       hasError = true;
     }
@@ -43,10 +54,14 @@ export default function WelcomeSignInScreen() {
     if (hasError) return;
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    const result = await signIn(cleanEmail, password);
+    setIsLoading(false);
+
+    if (result.error) {
+      setAuthError(result.error);
+    } else {
       router.push('/chats');
-    }, 400);
+    }
   };
 
   return (
@@ -89,16 +104,51 @@ export default function WelcomeSignInScreen() {
               </ThemedText>
 
               <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
-                Strict maximum of {MAX_REGISTERED_MEMBERS} members. Completely private,
+                Strict maximum of {capacity.maxMembers} members. Completely private,
                 direct one-to-one communications.
               </ThemedText>
+
+              {/* Status indicator pill */}
+              <View
+                style={[
+                  styles.statusPill,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceSecondary,
+                    borderRadius: radius.full,
+                    marginTop: 8,
+                  },
+                ]}
+              >
+                <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
+                  {isConfigured ? 'SUPABASE AUTH ACTIVE' : 'LOCAL DEMO MODE'}
+                </ThemedText>
+              </View>
             </View>
 
             {/* Sign-in Form */}
-            <AppCard style={[styles.formCard, { marginTop: spacing.lg, gap: spacing.md }]}>
+            <AppCard style={[styles.formCard, { marginTop: spacing.md, gap: spacing.md }]}>
               <ThemedText variant="h3">
                 Sign In
               </ThemedText>
+
+              {Boolean(authError) ? (
+                <View
+                  style={[
+                    styles.errorBanner,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderRadius: radius.md,
+                      padding: spacing.sm + 2,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
+                    {authError}
+                  </ThemedText>
+                </View>
+              ) : null}
 
               <AppTextInput
                 label="Email"
@@ -107,6 +157,7 @@ export default function WelcomeSignInScreen() {
                 onChangeText={(t) => {
                   setEmail(t);
                   if (emailError) setEmailError('');
+                  if (authError) setAuthError('');
                 }}
                 error={emailError}
                 keyboardType="email-address"
@@ -122,6 +173,7 @@ export default function WelcomeSignInScreen() {
                 onChangeText={(t) => {
                   setPassword(t);
                   if (passwordError) setPasswordError('');
+                  if (authError) setAuthError('');
                 }}
                 error={passwordError}
                 isPassword
@@ -131,33 +183,41 @@ export default function WelcomeSignInScreen() {
                 <AppButton
                   title="Sign In"
                   variant="primary"
-                  loading={isLoading}
+                  loading={isLoading || isAuthRestoring}
                   onPress={handleSignIn}
                 />
 
-                <AppButton
-                  title="Explore Mock Chats (Direct Access)"
-                  variant="secondary"
-                  onPress={() => router.push('/chats')}
-                />
+                {!isConfigured ? (
+                  <AppButton
+                    title="Explore Mock Chats (Direct Access)"
+                    variant="secondary"
+                    onPress={() => router.push('/chats')}
+                  />
+                ) : null}
               </View>
             </AppCard>
 
             {/* Registration Navigation Link */}
             <View style={[styles.footerNav, { marginTop: spacing.md }]}>
               <ThemedText variant="caption" tone="muted">
-                New member with invite?{' '}
+                {capacity.isFull ? 'Network full.' : 'New member with invite?'}{' '}
               </ThemedText>
-              <Pressable
-                hitSlop={8}
-                onPress={() => router.push('/register')}
-                accessibilityRole="link"
-                accessibilityLabel="Register Account"
-              >
-                <Text style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '600' }}>
-                  Register Account
-                </Text>
-              </Pressable>
+              {capacity.isFull ? (
+                <ThemedText variant="caption" tone="secondary" style={{ fontWeight: '600' }}>
+                  Registration Closed
+                </ThemedText>
+              ) : (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => router.push('/register')}
+                  accessibilityRole="link"
+                  accessibilityLabel="Register Account"
+                >
+                  <Text style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '600' }}>
+                    Register Account
+                  </Text>
+                </Pressable>
+              )}
             </View>
 
             {/* Privacy & Member Constraint Banner */}
@@ -175,17 +235,17 @@ export default function WelcomeSignInScreen() {
             >
               <View style={styles.slotMeterRow}>
                 <ThemedText variant="label" tone="muted">
-                  SLOTS OCCUPIED: {MOCK_NETWORK_STATUS.activeMembers} / {MOCK_NETWORK_STATUS.maxMembers}
+                  SLOTS OCCUPIED: {capacity.activeMembers} / {capacity.maxMembers}
                 </ThemedText>
                 <View style={styles.slotDots}>
-                  {Array.from({ length: MAX_REGISTERED_MEMBERS }).map((_, i) => (
+                  {Array.from({ length: capacity.maxMembers }).map((_, i) => (
                     <View
                       key={i}
                       style={[
                         styles.slotDot,
                         {
                           backgroundColor:
-                            i < MOCK_NETWORK_STATUS.activeMembers ? colors.text : 'transparent',
+                            i < capacity.activeMembers ? colors.text : 'transparent',
                           borderColor: colors.textMuted,
                         },
                       ]}
@@ -195,8 +255,9 @@ export default function WelcomeSignInScreen() {
               </View>
 
               <ThemedText variant="caption" tone="secondary" style={{ marginTop: 6 }}>
-                Registration is closed once member capacity reaches {MAX_REGISTERED_MEMBERS}.
-                Zero ad tracking, zero analytics telemetry.
+                {capacity.isFull
+                  ? 'All 10 member slots are currently filled. New signups are locked.'
+                  : `Registration will close automatically once capacity reaches ${capacity.maxMembers}. Zero ad tracking, zero telemetry.`}
               </ThemedText>
             </View>
           </ScrollView>
@@ -244,8 +305,16 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     maxWidth: 320,
   },
+  statusPill: {
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
   formCard: {
     width: '100%',
+  },
+  errorBanner: {
+    borderWidth: 1,
   },
   footerNav: {
     flexDirection: 'row',

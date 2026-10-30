@@ -2,12 +2,13 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppTheme } from '@/hooks/use-theme';
+import { AuthProvider } from '@/context/AuthContext';
 
 export default function RootLayout() {
   const { colors } = useAppTheme();
 
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -52,6 +53,6 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-    </>
+    </AuthProvider>
   );
 }
