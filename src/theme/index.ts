@@ -1,42 +1,41 @@
 /**
- * Theme configuration module.
+ * Centralized Raw Black Theme Configuration Module.
  *
- * Centralizes color palettes, spacing units, border radii, and typography.
- * The application defaults to dark mode for an eye-friendly, private messaging feel.
+ * Theme tokens strictly follow the Raw Black specification:
+ * - Main background: #000000
+ * - Elevated surfaces: #0A0A0A
+ * - Secondary surfaces: #111111
+ * - Input backgrounds: #0D0D0D
+ * - Borders: #262626
+ * - Primary text: #FFFFFF
+ * - Secondary text: #A3A3A3
+ * - Muted text: #737373
+ *
+ * No colorful accents or gradients.
  */
 
-import { Colors, ColorPalette, ColorScheme } from './colors';
+import { Colors, ColorPalette, ColorScheme, RawBlackColors } from './colors';
 import { Radius, Spacing } from './spacing';
 import { Typography } from './typography';
 
-export { Colors, Radius, Spacing, Typography };
+export { Colors, Radius, Spacing, Typography, RawBlackColors };
 export type { ColorPalette, ColorScheme };
 
 export interface AppTheme {
-  isDark: boolean;
+  isDark: true;
   colors: ColorPalette;
   spacing: typeof Spacing;
   radius: typeof Radius;
   typography: typeof Typography;
 }
 
-export const darkTheme: AppTheme = {
+export const theme: AppTheme = {
   isDark: true,
-  colors: Colors.dark,
+  colors: RawBlackColors,
   spacing: Spacing,
   radius: Radius,
   typography: Typography,
 };
 
-export const lightTheme: AppTheme = {
-  isDark: false,
-  colors: Colors.light,
-  spacing: Spacing,
-  radius: Radius,
-  typography: Typography,
-};
-
-/**
- * Default application theme (Dark-first)
- */
-export const theme = darkTheme;
+export const darkTheme = theme;
+export const lightTheme = theme; // Strictly raw black across all modes

@@ -1,18 +1,15 @@
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { darkTheme, lightTheme, AppTheme } from '@/theme';
+import { theme, AppTheme, ColorPalette } from '@/theme';
 
 /**
- * Access the active theme, respecting the system color scheme while defaulting to dark.
+ * Access the centralized Raw Black theme.
  */
 export function useAppTheme(): AppTheme {
-  const scheme = useColorScheme();
-  return scheme === 'light' ? lightTheme : darkTheme;
+  return theme;
 }
 
 /**
- * Backwards compatibility alias for existing code
+ * Convenience hook to access theme colors directly.
  */
-export function useTheme() {
-  const appTheme = useAppTheme();
-  return appTheme.colors;
+export function useTheme(): ColorPalette {
+  return theme.colors;
 }

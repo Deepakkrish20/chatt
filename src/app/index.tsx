@@ -1,123 +1,152 @@
 import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ThemedView, ThemedText, AppCard, AppButton } from '@/components';
+import { router } from 'expo-router';
+import {
+  ThemedView,
+  ThemedText,
+  AppTextInput,
+  AppButton,
+  AppIcon,
+  AppCard,
+} from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
 
-export default function HomeScreen() {
+export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const [tapCount, setTapCount] = useState(0);
+  const [email, setEmail] = useState('alex@private.chat');
+  const [password, setPassword] = useState('••••••••••••');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignIn = () => {
+    setIsLoading(true);
+    // Local mock navigation
+    setTimeout(() => {
+      setIsLoading(false);
+      router.push('/chats');
+    }, 350);
+  };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { padding: spacing.lg, gap: spacing.md },
-          ]}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardView}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: colors.accentMuted,
-                  borderColor: colors.accentLight,
-                  borderRadius: radius.full,
-                  paddingHorizontal: spacing.sm + 4,
-                  paddingVertical: spacing.xs,
-                },
-              ]}
-            >
-              <ThemedText variant="label" style={{ color: colors.accentLight }}>
-                MODULE 1 — FOUNDATION READY
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Minimalist Monochrome Brand Header */}
+            <View style={styles.brandSection}>
+              <View
+                style={[
+                  styles.logoBadge,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceElevated,
+                    borderRadius: radius.md,
+                    padding: spacing.sm,
+                  },
+                ]}
+              >
+                <AppIcon name="lock" size={24} color={colors.text} />
+              </View>
+
+              <ThemedText variant="display" style={styles.title}>
+                CHATT
+              </ThemedText>
+
+              <ThemedText variant="label" tone="muted" style={styles.brandTag}>
+                CLOSED-CIRCLE 1:1 MESSENGER
+              </ThemedText>
+
+              <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
+                Strict maximum of {MAX_REGISTERED_MEMBERS} members. Completely private,
+                direct one-to-one communications.
               </ThemedText>
             </View>
 
-            <ThemedText variant="h1" style={styles.title}>
-              Chatt
-            </ThemedText>
-            <ThemedText variant="caption" style={styles.subtitle}>
-              Private, one-to-one mobile messaging for up to {MAX_REGISTERED_MEMBERS} members.
-            </ThemedText>
-          </View>
+            {/* Sign-in Form */}
+            <AppCard style={[styles.formCard, { marginTop: spacing.xl, gap: spacing.md }]}>
+              <ThemedText variant="h3" style={{ marginBottom: spacing.xs }}>
+                Sign In
+              </ThemedText>
 
-          {/* Core Constraint Card */}
-          <AppCard>
-            <ThemedText variant="label" style={{ color: colors.accent }}>
-              PRODUCT SPECIFICATION
-            </ThemedText>
-            <ThemedText variant="h3" style={{ marginTop: spacing.xs }}>
-              Private Member Limit
-            </ThemedText>
-            <ThemedText
-              variant="body"
-              style={{ color: colors.textSecondary, marginTop: spacing.xs }}
-            >
-              Strict hard cap of {MAX_REGISTERED_MEMBERS} registered members. Exclusively
-              one-to-one private conversations, with no public groups or open channels.
-            </ThemedText>
-          </AppCard>
-
-          {/* Architecture Overview Card */}
-          <AppCard elevated>
-            <ThemedText variant="label" style={{ color: colors.textMuted }}>
-              TECHNOLOGY STACK
-            </ThemedText>
-            <View style={[styles.techList, { gap: spacing.sm, marginTop: spacing.sm }]}>
-              <View style={styles.techRow}>
-                <ThemedText variant="caption">• Expo + React Native</ThemedText>
-                <ThemedText variant="code">SDK 58</ThemedText>
-              </View>
-              <View style={styles.techRow}>
-                <ThemedText variant="caption">• Navigation & Routing</ThemedText>
-                <ThemedText variant="code">Expo Router</ThemedText>
-              </View>
-              <View style={styles.techRow}>
-                <ThemedText variant="caption">• Language & Type Safety</ThemedText>
-                <ThemedText variant="code">TypeScript</ThemedText>
-              </View>
-              <View style={styles.techRow}>
-                <ThemedText variant="caption">• Backend Target</ThemedText>
-                <ThemedText variant="code">Supabase</ThemedText>
-              </View>
-            </View>
-          </AppCard>
-
-          {/* Design System Verification Card */}
-          <AppCard>
-            <ThemedText variant="label" style={{ color: colors.textMuted }}>
-              DESIGN FOUNDATION
-            </ThemedText>
-            <ThemedText
-              variant="body"
-              style={{ color: colors.textSecondary, marginTop: spacing.xs }}
-            >
-              Dark-mode first color tokens, high-contrast readable typography, and
-              consistent border radii.
-            </ThemedText>
-            <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-              <AppButton
-                title={
-                  tapCount === 0
-                    ? 'Verify Accent Theme Token'
-                    : `Accent Token Verified (${tapCount} taps)`
-                }
-                variant="primary"
-                onPress={() => setTapCount((c) => c + 1)}
+              <AppTextInput
+                label="Email"
+                placeholder="name@domain.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
-              <AppButton
-                title="Secondary Surface Variant"
-                variant="secondary"
-                onPress={() => {}}
+
+              <AppTextInput
+                label="Password"
+                placeholder="Enter password"
+                value={password}
+                onChangeText={setPassword}
+                isPassword
               />
+
+              <View style={{ marginTop: spacing.xs, gap: spacing.sm }}>
+                <AppButton
+                  title="Sign In"
+                  variant="primary"
+                  loading={isLoading}
+                  onPress={handleSignIn}
+                />
+
+                <AppButton
+                  title="Explore Mock Chats (Direct Access)"
+                  variant="secondary"
+                  onPress={() => router.push('/chats')}
+                />
+              </View>
+            </AppCard>
+
+            {/* Registration Navigation Link */}
+            <View style={[styles.footerNav, { marginTop: spacing.lg }]}>
+              <ThemedText variant="caption" tone="muted">
+                New member with invite?{' '}
+              </ThemedText>
+              <Text
+                onPress={() => router.push('/register')}
+                style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '500' }}
+              >
+                Register Account
+              </Text>
             </View>
-          </AppCard>
-        </ScrollView>
+
+            {/* Privacy & Member Constraint Banner */}
+            <View
+              style={[
+                styles.constraintBanner,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceSecondary,
+                  borderRadius: radius.md,
+                  padding: spacing.md,
+                  marginTop: spacing.xl,
+                },
+              ]}
+            >
+              <ThemedText variant="label" tone="muted" style={{ marginBottom: 4 }}>
+                NETWORK STATUS: 4 / {MAX_REGISTERED_MEMBERS} SLOTS OCCUPIED
+              </ThemedText>
+              <ThemedText variant="caption" tone="secondary">
+                Registration is closed once member capacity reaches {MAX_REGISTERED_MEMBERS}.
+                Zero ad tracking, zero telemetry.
+              </ThemedText>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -130,32 +159,47 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
-    maxWidth: 640,
+    maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
   },
-  header: {
+  brandSection: {
     alignItems: 'center',
-    marginBottom: 8,
   },
-  badge: {
+  logoBadge: {
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  brandTag: {
+    marginTop: 6,
     textAlign: 'center',
   },
   subtitle: {
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 8,
+    lineHeight: 20,
+    maxWidth: 320,
   },
-  techList: {
+  formCard: {
     width: '100%',
   },
-  techRow: {
+  footerNav: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  constraintBanner: {
+    borderWidth: 1,
     alignItems: 'center',
   },
 });

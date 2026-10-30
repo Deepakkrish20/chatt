@@ -1,18 +1,20 @@
 # Chatt — System Architecture & Foundation Document
 
-## 1. Overview & Purpose of Module 1
+## 1. Overview & Project Purpose
 
-This document defines the architectural baseline and technical foundation for **Chatt**, a high-privacy, closed-circle mobile messaging application.
+This document defines the architectural baseline and technical foundation for **Chatt**, a high-privacy, closed-circle mobile messaging application built with **Expo**, **React Native**, and **TypeScript**.
 
-The primary objective of **Module 1 (Project Foundation Setup)** is to create a clean, stable, and strictly typed baseline project structure without prematurely implementing authentication, database persistence, or messaging mechanics.
+- **Module 1 (Completed)**: Initialized the baseline project repository, strict TypeScript typing, Expo Router configuration, theme foundations, and empty Supabase placeholders.
+- **Module 2 (Current)**: Established the **Raw Black Monochrome UI Foundation**, complete with design tokens, reusable UI primitives, and 5 fully navigable screens powered by local mock data.
 
 ---
 
 ## 2. Core Product Requirements & Constraints
 
 * **Maximum Registered Members**: The application strictly enforces a **hard cap of 10 registered members**. Once 10 accounts exist, no additional users may register.
-* **One-to-One Messaging Only**: Communication is exclusively private, direct one-to-one messaging between registered members. Public channels, open rooms, and group chats are explicitly out of scope.
+* **One-to-One Messaging Only**: Communication is exclusively private, direct one-to-one messaging between registered members. Public channels, open rooms, and group chats are strictly excluded.
 * **Closed-Circle Privacy**: All messaging data, user presence, and media are restricted solely to the two participants of each direct conversation.
+* **Raw Black Monochrome Aesthetic**: Clean OLED true-black palette without colourful accents, gradients, or excessive ornamentation.
 
 ---
 
@@ -29,83 +31,82 @@ The primary objective of **Module 1 (Project Foundation Setup)** is to create a 
 
 ---
 
-## 4. Project Directory Structure
+## 4. Raw Black Monochrome Design System
 
-```text
-chatt/
-├── .gitignore                     # Git ignore rules for Expo/React Native & dependencies
-├── AGENTS.md                      # Agent rules and Expo SDK guidelines
-├── app.json                       # Expo application manifest and configuration
-├── assets/                        # Static icons, splash images, and app badges
-│   └── images/
-├── docs/
-│   └── architecture.md            # System architecture, constraints, and module roadmap
-├── package.json                   # Project manifest, scripts, and dependencies
-├── tsconfig.json                  # Strict TypeScript configuration with alias mappings
-├── eslint.config.js               # Flat ESLint configuration with expo lint rules
-└── src/
-    ├── app/                       # Expo Router route definitions (screens and layout only)
-    │   ├── _layout.tsx            # Root Stack navigator, StatusBar & Theme integration
-    │   └── index.tsx              # Application entry / verification dashboard
-    ├── components/                # Reusable UI component library
-    │   ├── AppButton.tsx          # Accessible button with accent styling and pressed states
-    │   ├── AppCard.tsx            # Elevated surface container with subtle border & radius
-    │   ├── ThemedText.tsx         # Typography component mapping to design tokens
-    │   ├── ThemedView.tsx         # Themed container component for background hierarchies
-    │   └── index.ts               # Clean component barrel export
-    ├── hooks/                     # Custom React hooks
-    │   ├── use-color-scheme.ts    # Native color-scheme hook
-    │   ├── use-color-scheme.web.ts# SSR/Hydration-safe color-scheme hook for web
-    │   └── use-theme.ts           # Access point for active theme and color tokens
-    ├── lib/                       # Third-party integrations
-    │   └── supabase/              # Future Supabase client & schema contracts
-    │       ├── client.ts          # Env configuration placeholder (no credentials/live calls)
-    │       ├── types.ts           # Schema models placeholder (Profile, DirectMessage)
-    │       └── index.ts           # Supabase barrel export
-    ├── theme/                     # Design tokens and theme system
-    │   ├── colors.ts              # Dark-first palette, text hierarchy, Electric Indigo accent
-    │   ├── spacing.ts             # Spacing scale and corner radius tokens
-    │   ├── typography.ts          # Typography scale, line heights, font families
-    │   └── index.ts               # AppTheme interface, default dark theme, exports
-    ├── types/                     # Shared domain and global TypeScript interfaces
-    │   ├── declarations.d.ts      # CSS and asset ambient declarations
-    │   └── index.ts               # Domain interfaces and MAX_REGISTERED_MEMBERS constant
-    └── utils/                     # Pure utility functions
-        └── index.ts               # Text truncation, initials extraction, member cap check
-```
+The design system is established in `src/theme/` and strictly implements the monochrome palette:
+
+| Token | Hex Value | Usage |
+| :--- | :--- | :--- |
+| `background` | `#000000` | True black base background for OLED screens |
+| `surfaceElevated` | `#0A0A0A` | Elevated containers, cards, and modal sheets |
+| `surfaceSecondary` | `#111111` | Secondary surfaces, list rows, incoming bubbles |
+| `inputBackground` | `#0D0D0D` | Form inputs and message composer background |
+| `border` | `#262626` | Geometric dividers, input outlines, and component edges |
+| `text` | `#FFFFFF` | Primary high-contrast text and interactive labels |
+| `textSecondary` | `#A3A3A3` | Secondary text, chat snippets, descriptions |
+| `textMuted` | `#737373` | Metadata, timestamps, placeholders, uppercase tags |
+
+Strictly avoids colorful accents, unnecessary gradients, colorful shadows, and excessive decoration.
 
 ---
 
-## 5. Design Foundation
+## 5. Project Directory & Route Structure
 
-The design system is established in `src/theme/` and adheres to a modern, dark-first visual language tailored for private communications:
-
-1. **Dark Backgrounds**:
-   * Root Background: `#0F1117` (OLED-friendly dark base)
-   * Surface Layer: `#181B24` (Elevated card containers)
-   * Elevated Surface: `#222634` (Interactive / highlighted containers)
-   * Subtle Borders: `#2A3042`
-2. **Readable Typography**:
-   * Text Primary: `#F3F4F6` (High contrast, crisp legibility)
-   * Text Secondary: `#9CA3AF` (Captions, timestamps, descriptions)
-   * Text Muted: `#6B7280` (Labels, metadata)
-3. **Distinctive Accent Color**:
-   * Accent: `#6366F1` (Electric Indigo)
-   * Accent Hover: `#4F46E5`
-   * Accent Light: `#818CF8`
-   * Accent Muted: `rgba(99, 102, 241, 0.16)`
-4. **Spacing & Geometry**:
-   * Consistent spacing units (`xs: 4`, `sm: 8`, `md: 16`, `lg: 24`, `xl: 32`, `xxl: 48`)
-   * Harmonized border radius (`sm: 6`, `md: 10`, `lg: 16`, `full: 9999`)
+```text
+chatt/
+├── docs/
+│   └── architecture.md            # System architecture, constraints, and module roadmap
+├── src/
+│   ├── app/                       # Expo Router screens and layout
+│   │   ├── _layout.tsx            # Root Stack navigator, StatusBar & Theme integration
+│   │   ├── index.tsx              # 1. Welcome / Sign-in screen
+│   │   ├── register.tsx           # 2. Member registration screen
+│   │   ├── chats.tsx              # 3. Chat list & conversation previews
+│   │   ├── chat/
+│   │   │   └── [id].tsx           # 4. Private 1:1 chat screen & composer
+│   │   └── settings.tsx           # 5. Profile & Raw Black appearance settings
+│   ├── components/                # Reusable UI component library
+│   │   ├── AppAvatar.tsx          # Initial-based avatar with online indicator
+│   │   ├── AppButton.tsx          # Primary (#FFFFFF), secondary (#111111), and ghost buttons
+│   │   ├── AppCard.tsx            # Elevated raw black container with subtle borders
+│   │   ├── AppIcon.tsx            # Pure React Native geometric monochrome icons
+│   │   ├── AppTextInput.tsx       # Raw black input with labels, states, and password toggles
+│   │   ├── ConversationItem.tsx   # Chat list row with snippets, timestamps, unread badge
+│   │   ├── MessageBubble.tsx      # Incoming (#111111) & outgoing (#FFFFFF) chat bubbles
+│   │   ├── MessageComposer.tsx    # Bottom message composer with send action
+│   │   ├── ScreenHeader.tsx       # Uniform top navigation header with back button
+│   │   ├── ThemedText.tsx         # Typography token wrapper
+│   │   ├── ThemedView.tsx         # Surface and background wrapper
+│   │   └── index.ts               # Clean component barrel export
+│   ├── data/
+│   │   └── mockData.ts            # Local mock users, conversations, and messages
+│   ├── hooks/
+│   │   ├── use-color-scheme.ts    # Native color-scheme hook
+│   │   ├── use-color-scheme.web.ts# SSR/Hydration-safe hook for web
+│   │   └── use-theme.ts           # Access point for active theme and color tokens
+│   ├── lib/
+│   │   └── supabase/              # Future Supabase client & schema contracts
+│   ├── theme/
+│   │   ├── colors.ts              # Raw Black color tokens
+│   │   ├── spacing.ts             # Spacing scale and corner radius tokens
+│   │   ├── typography.ts          # Typography scale, line heights, font families
+│   │   └── index.ts               # AppTheme interface, default theme, exports
+│   ├── types/
+│   │   ├── declarations.d.ts      # CSS and asset ambient declarations
+│   │   └── index.ts               # DirectMessage, DirectConversationPreview, UserSummary
+│   └── utils/
+│       └── index.ts               # Text truncation, initials extraction, member cap check
+```
 
 ---
 
 ## 6. Planned Future Modules
 
-The application will be developed progressively across the following modules:
+The application is structured to add functional layers sequentially:
 
-* **Module 1 (Current)**: **Project Foundation Setup** — Repository initialization, Expo Router configuration, TypeScript contracts, Theme foundation, Supabase scaffolding, and verification.
-* **Module 2**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
-* **Module 3**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`profiles`, `conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
-* **Module 4**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
-* **Module 5**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.
+* **Module 1 (Done)**: **Project Foundation Setup** — Repository initialization, Expo Router configuration, TypeScript contracts, Theme foundation, Supabase scaffolding, and verification.
+* **Module 2 (Done)**: **Raw Black UI Foundation** — Centralized monochrome theme, reusable UI component library, 5 core screens, and local mock navigation.
+* **Module 3 (Future)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
+* **Module 4 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`profiles`, `conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
+* **Module 5 (Future)**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
+* **Module 6 (Future)**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.

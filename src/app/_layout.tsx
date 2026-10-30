@@ -4,20 +4,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useAppTheme } from '@/hooks/use-theme';
 
 export default function RootLayout() {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: {
-            backgroundColor: colors.background,
-          },
-          headerTintColor: colors.text,
-          headerTitleStyle: {
-            fontWeight: '600',
-          },
+          headerShown: false,
           contentStyle: {
             backgroundColor: colors.background,
           },
@@ -27,8 +21,35 @@ export default function RootLayout() {
         <Stack.Screen
           name="index"
           options={{
-            title: 'Chatt',
-            headerShown: false,
+            title: 'Welcome',
+          }}
+        />
+        <Stack.Screen
+          name="register"
+          options={{
+            title: 'Register',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="chats"
+          options={{
+            title: 'Chats',
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
+          name="chat/[id]"
+          options={{
+            title: 'Chat',
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            animation: 'slide_from_right',
           }}
         />
       </Stack>

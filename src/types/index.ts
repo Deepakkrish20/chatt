@@ -8,22 +8,34 @@
 
 export const MAX_REGISTERED_MEMBERS = 10;
 
-export type ThemeMode = 'dark' | 'light';
-
 export interface UserSummary {
   id: string;
   username: string;
   displayName: string;
   avatarUrl?: string;
   isOnline?: boolean;
+  statusText?: string;
   createdAt: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  createdAt: string;
+  isOutgoing: boolean;
+  status: 'sent' | 'delivered' | 'read';
 }
 
 export interface DirectConversationPreview {
   id: string;
   participantId: string;
   participantName: string;
-  lastMessageSnippet?: string;
-  lastMessageTimestamp?: string;
+  participantUsername: string;
+  isOnline: boolean;
+  lastMessageSnippet: string;
+  lastMessageTimestamp: string;
   unreadCount: number;
 }

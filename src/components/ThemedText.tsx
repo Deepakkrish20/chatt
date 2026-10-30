@@ -3,23 +3,29 @@ import { Text, type TextProps } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 
 export type TextVariant =
+  | 'display'
   | 'h1'
   | 'h2'
   | 'h3'
   | 'body'
   | 'bodyMedium'
+  | 'bodySemibold'
   | 'caption'
+  | 'captionMedium'
   | 'label'
-  | 'code'
-  | 'accent';
+  | 'code';
+
+export type TextColorTone = 'primary' | 'secondary' | 'muted' | 'inverse';
 
 export interface ThemedTextProps extends TextProps {
   variant?: TextVariant;
+  tone?: TextColorTone;
   color?: string;
 }
 
 export function ThemedText({
   variant = 'body',
+  tone = 'primary',
   color,
   style,
   ...rest
@@ -28,14 +34,18 @@ export function ThemedText({
 
   const getTextColor = () => {
     if (color) return color;
-    switch (variant) {
-      case 'caption':
+    switch (tone) {
+      case 'secondary':
         return colors.textSecondary;
-      case 'label':
+      case 'muted':
         return colors.textMuted;
-      case 'accent':
-        return colors.accent;
+      case 'inverse':
+        return colors.textInverse;
+      case 'primary':
       default:
+        // By default, caption and label lean towards secondary/muted tones
+        if (variant === 'caption' || variant === 'captionMedium') return colors.textSecondary;
+        if (variant === 'label') return colors.textMuted;
         return colors.text;
     }
   };
