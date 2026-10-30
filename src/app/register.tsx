@@ -17,19 +17,19 @@ type RegistrationStep = 'email_input' | 'verify_otp' | 'set_password';
 
 export default function RegisterScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { requestEmailOtp, verifyEmailOtp, setPasswordAndProfile, capacity } = useAuth();
+  const { requestEmailOtp, verifyEmailOtp, setPasswordAndProfile, capacity, isConfigured } = useAuth();
 
   const [step, setStep] = useState<RegistrationStep>('email_input');
 
-  // Step 1: User Details & Email
-  const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
+  // Step 1: Email Address
   const [email, setEmail] = useState('');
 
   // Step 2: Verification Code
   const [otpCode, setOtpCode] = useState('');
 
-  // Step 3: Password Setup
+  // Step 3: Profile & Password Setup
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -43,22 +43,11 @@ export default function RegisterScreen() {
     setGeneralError('');
     const newErrors: Record<string, string> = {};
 
-    if (!name.trim()) {
-      newErrors.name = 'Full name is required';
-    }
-
-    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    if (!cleanUsername) {
-      newErrors.username = 'Username is required';
-    } else if (cleanUsername.length < 3) {
-      newErrors.username = 'Minimum 3 characters';
-    }
-
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
       newErrors.email = 'Email address is required';
     } else if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      newErrors.email = 'Enter a valid email address';
+      newErrors.email = 'Enter a valid email format (e.g. name@domain.com)';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -75,6 +64,10 @@ export default function RegisterScreen() {
     if (result.error) {
       setGeneralError(result.error);
     } else {
+      // Auto-suggest name and username from email prefix for Step 3
+      const suggested = cleanEmail.split('@')[0];
+      if (!name) setName(suggested.replace(/[._]/g, ' '));
+      if (!username) setUsername(suggested.toLowerCase().replace(/[^a-z0-9_]/g, ''));
       setStep('verify_otp');
     }
   };
@@ -82,12 +75,14 @@ export default function RegisterScreen() {
   // 2. Verify Email OTP Code
   const handleVerifyOtp = async () => {
     setGeneralError('');
-    if (!otpCode.trim()) {
+    const cleanOtp = otpCode.trim();
+
+    if (!cleanOtp) {
       setErrors({ otp: 'Please enter the 6-digit code' });
       return;
     }
 
-    if (otpCode.trim().length < 6) {
+    if (cleanOtp.length < 6) {
       setErrors({ otp: 'Code must be 6 digits' });
       return;
     }
@@ -95,7 +90,7 @@ export default function RegisterScreen() {
     setErrors({});
     setIsLoading(true);
 
-    const result = await verifyEmailOtp(email.trim(), otpCode.trim());
+    const result = await verifyEmailOtp(email.trim(), cleanOtp);
     setIsLoading(false);
 
     if (result.error) {
@@ -120,6 +115,9 @@ export default function RegisterScreen() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
+    const cleanName = name.trim() || email.split('@')[0];
+    const cleanUser = (username.trim() || cleanName).toLowerCase().replace(/[^a-z0-9_]/g, '');
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -128,8 +126,7 @@ export default function RegisterScreen() {
     setErrors({});
     setIsLoading(true);
 
-    const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    const result = await setPasswordAndProfile(password, name.trim(), cleanUser);
+    const result = await setPasswordAndProfile(password, cleanName, cleanUser);
     setIsLoading(false);
 
     if (result.error) {
@@ -144,10 +141,10 @@ export default function RegisterScreen() {
       return 'Registration Closed (All 10 slots filled)';
     }
     if (step === 'email_input') {
-      return `Step 1 of 3: Enter Details (${capacity.activeMembers} of ${capacity.maxMembers} slots claimed)`;
+      return `Step 1 of 3: Enter Email (${capacity.activeMembers} of ${capacity.maxMembers} claimed)`;
     }
     if (step === 'verify_otp') {
-      return 'Step 2 of 3: Email Verification';
+      return 'Step 2 of 3: Check Email for 6-Digit Code';
     }
     return 'Step 3 of 3: Set Master Password';
   };
@@ -186,18 +183,18 @@ export default function RegisterScreen() {
               {/* Header based on current step */}
               {step === 'email_input' ? (
                 <>
-                  <ThemedText variant="h3">Member Registration</ThemedText>
+                  <ThemedText variant="h3">Enter Your Email</ThemedText>
                   <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    Membership is strictly restricted to {capacity.maxMembers} verified participants.
+                    We will send a 6-digit verification code directly to your email address.
                   </ThemedText>
                 </>
               ) : null}
 
               {step === 'verify_otp' ? (
                 <>
-                  <ThemedText variant="h3">Verify Your Email</ThemedText>
+                  <ThemedText variant="h3">Check Your Inbox</ThemedText>
                   <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    We sent a 6-digit confirmation code to {email}.
+                    Enter the 6-digit code sent to <ThemedText variant="caption" tone="primary" style={{ fontWeight: '600' }}>{email}</ThemedText>.
                   </ThemedText>
                 </>
               ) : null}
@@ -206,7 +203,7 @@ export default function RegisterScreen() {
                 <>
                   <ThemedText variant="h3">Set Master Password</ThemedText>
                   <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    Email verified. Create your private master password for future logins.
+                    Email verified! Choose your private master password for future logins.
                   </ThemedText>
                 </>
               ) : null}
@@ -243,55 +240,27 @@ export default function RegisterScreen() {
                       borderColor: colors.border,
                       backgroundColor: colors.surfaceSecondary,
                       borderRadius: radius.md,
-                      padding: spacing.sm + 2,
+                      padding: spacing.md,
                     },
                   ]}
                 >
-                  <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
+                  <ThemedText variant="body" tone="primary" style={{ textAlign: 'center', lineHeight: 20 }}>
                     {generalError}
                   </ThemedText>
                 </View>
               ) : null}
 
-              {/* STEP 1: Email & Details */}
+              {/* STEP 1: Email Input ONLY */}
               {step === 'email_input' ? (
                 <>
                   <AppTextInput
-                    label="Full Name"
-                    placeholder="e.g. Deepak Krish"
-                    value={name}
-                    onChangeText={(t) => {
-                      setName(t);
-                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                    }}
-                    error={errors.name}
-                    autoCapitalize="words"
-                    onClear={() => setName('')}
-                    editable={!capacity.isFull}
-                  />
-
-                  <AppTextInput
-                    label="Username"
-                    placeholder="e.g. deepakkrish"
-                    value={username}
-                    onChangeText={(t) => {
-                      setUsername(t);
-                      if (errors.username) setErrors((prev) => ({ ...prev, username: '' }));
-                    }}
-                    error={errors.username}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onClear={() => setUsername('')}
-                    editable={!capacity.isFull}
-                  />
-
-                  <AppTextInput
                     label="Email Address"
-                    placeholder="name@domain.com"
+                    placeholder="e.g. yourname@gmail.com"
                     value={email}
                     onChangeText={(t) => {
                       setEmail(t);
                       if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                      if (generalError) setGeneralError('');
                     }}
                     error={errors.email}
                     keyboardType="email-address"
@@ -308,6 +277,12 @@ export default function RegisterScreen() {
                     disabled={capacity.isFull || isLoading}
                     style={{ marginTop: spacing.xs }}
                   />
+
+                  {!isConfigured ? (
+                    <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center', marginTop: 4 }}>
+                      Requires Supabase project keys in .env to deliver real emails.
+                    </ThemedText>
+                  ) : null}
                 </>
               ) : null}
 
@@ -316,11 +291,12 @@ export default function RegisterScreen() {
                 <>
                   <AppTextInput
                     label="Verification Code (6 Digits)"
-                    placeholder="e.g. 123456"
+                    placeholder="Enter 6-digit code"
                     value={otpCode}
                     onChangeText={(t) => {
                       setOtpCode(t);
                       if (errors.otp) setErrors((prev) => ({ ...prev, otp: '' }));
+                      if (generalError) setGeneralError('');
                     }}
                     error={errors.otp}
                     keyboardType="number-pad"
@@ -359,9 +335,28 @@ export default function RegisterScreen() {
                 </>
               ) : null}
 
-              {/* STEP 3: Set Password */}
+              {/* STEP 3: Set Password & Profile */}
               {step === 'set_password' ? (
                 <>
+                  <AppTextInput
+                    label="Your Display Name"
+                    placeholder="e.g. Alex Vance"
+                    value={name}
+                    onChangeText={(t) => setName(t)}
+                    autoCapitalize="words"
+                    onClear={() => setName('')}
+                  />
+
+                  <AppTextInput
+                    label="Username"
+                    placeholder="e.g. alex_v"
+                    value={username}
+                    onChangeText={(t) => setUsername(t)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onClear={() => setUsername('')}
+                  />
+
                   <AppTextInput
                     label="Create Master Password"
                     placeholder="Minimum 6 characters"
