@@ -368,10 +368,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const redirectUrl =
+        typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : 'http://localhost:8081';
+
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true,
+          emailRedirectTo: redirectUrl,
         },
       });
 
