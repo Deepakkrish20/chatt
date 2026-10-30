@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
@@ -12,6 +12,7 @@ export interface MessageBubbleProps {
 export function MessageBubble({ message, animate = false }: MessageBubbleProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const isOutgoing = message.isOutgoing;
+  const useNativeDriver = Platform.OS !== 'web';
 
   const [fadeAnim] = useState(() => new Animated.Value(animate ? 0 : 1));
   const [slideAnim] = useState(() => new Animated.Value(animate ? 8 : 0));
@@ -22,16 +23,16 @@ export function MessageBubble({ message, animate = false }: MessageBubbleProps) 
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
       ]).start();
     }
-  }, [animate, fadeAnim, slideAnim]);
+  }, [animate, fadeAnim, slideAnim, useNativeDriver]);
 
   return (
     <Animated.View
@@ -93,13 +94,13 @@ export function MessageBubble({ message, animate = false }: MessageBubbleProps) 
             {message.createdAt}
           </Text>
 
-          {isOutgoing && (
+          {isOutgoing ? (
             <AppIcon
               name={message.status === 'read' ? 'check-all' : 'check'}
               size={12}
               color="#525252"
             />
-          )}
+          ) : null}
         </View>
       </View>
     </Animated.View>

@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import {
   Pressable,
   Text,
+  View,
   StyleSheet,
   ActivityIndicator,
   Animated,
+  Platform,
   type PressableProps,
   type ViewStyle,
   type StyleProp,
@@ -36,13 +38,14 @@ export function AppButton({
 }: AppButtonProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const [scaleAnim] = useState(() => new Animated.Value(1));
+  const useNativeDriver = Platform.OS !== 'web';
 
   const handlePressIn = () => {
     if (disabled || loading) return;
     Animated.timing(scaleAnim, {
       toValue: 0.98,
       duration: 100,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -51,7 +54,7 @@ export function AppButton({
     Animated.timing(scaleAnim, {
       toValue: 1,
       duration: 120,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -128,10 +131,12 @@ export function AppButton({
             color={variant === 'primary' ? colors.buttonPrimaryText : colors.text}
           />
         ) : (
-          <Text style={[textTypography, { color: getTextColor(), textAlign: 'center' }]}>
-            {icon ? `${icon} ` : ''}
-            {title}
-          </Text>
+          <View style={styles.buttonContent}>
+            {Boolean(icon) ? <View style={{ marginRight: 6 }}>{icon}</View> : null}
+            <Text style={[textTypography, { color: getTextColor(), textAlign: 'center' }]}>
+              {title}
+            </Text>
+          </View>
         )}
       </Pressable>
     </Animated.View>
@@ -144,5 +149,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

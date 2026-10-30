@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, View, StyleSheet, Text, Animated } from 'react-native';
+import { Pressable, View, StyleSheet, Text, Animated, Platform } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppAvatar } from './AppAvatar';
 import { ThemedText } from './ThemedText';
@@ -13,12 +13,13 @@ export interface ConversationItemProps {
 export function ConversationItem({ conversation, onPress }: ConversationItemProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const [scaleAnim] = useState(() => new Animated.Value(1));
+  const useNativeDriver = Platform.OS !== 'web';
 
   const handlePressIn = () => {
     Animated.timing(scaleAnim, {
       toValue: 0.985,
       duration: 100,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -26,9 +27,11 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
     Animated.timing(scaleAnim, {
       toValue: 1,
       duration: 120,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
+
+  const hasUnread = conversation.unreadCount > 0;
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -68,17 +71,17 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
           <View style={styles.bottomRow}>
             <ThemedText
               variant="caption"
-              tone={conversation.unreadCount > 0 ? 'primary' : 'secondary'}
+              tone={hasUnread ? 'primary' : 'secondary'}
               numberOfLines={1}
               style={[
                 styles.snippet,
-                conversation.unreadCount > 0 && { fontWeight: '500' },
+                hasUnread ? { fontWeight: '500' } : null,
               ]}
             >
               {conversation.lastMessageSnippet}
             </ThemedText>
 
-            {conversation.unreadCount > 0 && (
+            {hasUnread ? (
               <View
                 style={[
                   styles.badge,
@@ -95,7 +98,7 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
                   {conversation.unreadCount}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
       </Pressable>

@@ -63,20 +63,22 @@ export function AppTextInput({
     outputRange: [error ? '#737373' : colors.border, colors.text],
   });
 
+  const showClear = Boolean(value && !isPassword && onClear);
+
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      {label && (
+      {Boolean(label) ? (
         <View style={styles.labelRow}>
           <Text style={[typography.label, { color: isFocused ? colors.text : colors.textSecondary }]}>
-            {label.toUpperCase()}
+            {label!.toUpperCase()}
           </Text>
-          {error && (
+          {Boolean(error) ? (
             <Text style={[typography.label, { color: colors.textSecondary, textTransform: 'none' }]}>
               • {error}
             </Text>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <Animated.View
         style={[
@@ -105,7 +107,7 @@ export function AppTextInput({
           {...rest}
         />
 
-        {value && !isPassword && onClear && (
+        {showClear ? (
           <Pressable
             hitSlop={12}
             onPress={onClear}
@@ -117,9 +119,9 @@ export function AppTextInput({
               <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>✕</Text>
             </View>
           </Pressable>
-        )}
+        ) : null}
 
-        {isPassword && (
+        {isPassword ? (
           <Pressable
             hitSlop={12}
             onPress={() => setShowPassword((prev) => !prev)}
@@ -131,14 +133,14 @@ export function AppTextInput({
               {showPassword ? 'Hide' : 'Show'}
             </Text>
           </Pressable>
-        )}
+        ) : null}
       </Animated.View>
 
-      {!label && error ? (
+      {!label && Boolean(error) ? (
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
           {error}
         </Text>
-      ) : hint ? (
+      ) : Boolean(hint) ? (
         <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
           {hint}
         </Text>

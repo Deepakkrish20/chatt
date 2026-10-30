@@ -187,7 +187,7 @@ export default function PrivateChatScreen() {
           />
 
           {/* Peer Typing Indicator */}
-          {isPeerTyping && (
+          {isPeerTyping ? (
             <View style={[styles.typingRow, { paddingHorizontal: spacing.md, marginBottom: spacing.xs }]}>
               <View
                 style={[
@@ -206,7 +206,7 @@ export default function PrivateChatScreen() {
                 </ThemedText>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Message Composer */}
           <MessageComposer onSendMessage={handleSendMessage} />

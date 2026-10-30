@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 
@@ -15,6 +15,7 @@ export function MessageComposer({
   const { colors, spacing, radius, typography } = useAppTheme();
   const [text, setText] = useState('');
   const [buttonScale] = useState(() => new Animated.Value(1));
+  const useNativeDriver = Platform.OS !== 'web';
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -27,7 +28,7 @@ export function MessageComposer({
     Animated.timing(buttonScale, {
       toValue: 0.9,
       duration: 80,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -35,7 +36,7 @@ export function MessageComposer({
     Animated.timing(buttonScale, {
       toValue: 1,
       duration: 100,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 

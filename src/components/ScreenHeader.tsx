@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Pressable, StyleSheet, Animated, type ViewStyle, type StyleProp } from 'react-native';
+import { View, Pressable, StyleSheet, Animated, Platform, type ViewStyle, type StyleProp } from 'react-native';
 import { router } from 'expo-router';
 import { useAppTheme } from '@/hooks/use-theme';
 import { ThemedText } from './ThemedText';
@@ -24,6 +24,7 @@ export function ScreenHeader({
 }: ScreenHeaderProps) {
   const { colors, spacing } = useAppTheme();
   const [backScale] = useState(() => new Animated.Value(1));
+  const useNativeDriver = Platform.OS !== 'web';
 
   const handleBack = () => {
     if (onBack) {
@@ -37,7 +38,7 @@ export function ScreenHeader({
     Animated.timing(backScale, {
       toValue: 0.88,
       duration: 80,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -45,7 +46,7 @@ export function ScreenHeader({
     Animated.timing(backScale, {
       toValue: 1,
       duration: 100,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -63,7 +64,7 @@ export function ScreenHeader({
       ]}
     >
       <View style={styles.leftContainer}>
-        {showBack && (
+        {showBack ? (
           <Animated.View style={{ transform: [{ scale: backScale }] }}>
             <Pressable
               hitSlop={12}
@@ -77,21 +78,21 @@ export function ScreenHeader({
               <AppIcon name="back" size={20} color={colors.text} />
             </Pressable>
           </Animated.View>
-        )}
+        ) : null}
 
         <View style={styles.titles}>
           <ThemedText variant="h3" numberOfLines={1}>
             {title}
           </ThemedText>
-          {subtitle && (
+          {Boolean(subtitle) ? (
             <ThemedText variant="label" tone="muted" numberOfLines={1} style={{ marginTop: 2 }}>
               {subtitle}
             </ThemedText>
-          )}
+          ) : null}
         </View>
       </View>
 
-      {rightElement && <View style={styles.rightContainer}>{rightElement}</View>}
+      {Boolean(rightElement) ? <View style={styles.rightContainer}>{rightElement}</View> : null}
     </View>
   );
 }

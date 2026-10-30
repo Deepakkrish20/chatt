@@ -153,7 +153,7 @@ export default function ChatListScreen() {
                   ? `No peer conversations matching "${searchQuery}".`
                   : 'No active direct messages.'}
               </ThemedText>
-              {Boolean(searchQuery) && (
+              {Boolean(searchQuery) ? (
                 <View style={{ marginTop: spacing.md }}>
                   <AppButton
                     title="Clear Search"
@@ -162,7 +162,7 @@ export default function ChatListScreen() {
                     onPress={() => setSearchQuery('')}
                   />
                 </View>
-              )}
+              ) : null}
             </View>
           }
           showsVerticalScrollIndicator={false}

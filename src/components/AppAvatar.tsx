@@ -54,7 +54,7 @@ export function AppAvatar({
         <Text style={[fontStyle, { color: colors.text }]}>{initials}</Text>
       </View>
 
-      {isOnline && (
+      {isOnline ? (
         <View
           style={[
             styles.onlineBadge,
@@ -70,7 +70,7 @@ export function AppAvatar({
             },
           ]}
         />
-      )}
+      ) : null}
     </View>
   );
 }
