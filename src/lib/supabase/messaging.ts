@@ -6,7 +6,7 @@
  * - Chronological message history retrieval
  * - Server-validated message insertion
  * - Real-time incoming message subscriptions
- * - Fallback to mock data when running in offline/unconfigured demo mode
+ * - Pure empty states when no data exists (zero mock fallbacks)
  */
 
 import { supabase, isSupabaseConfigured } from './client';
@@ -15,8 +15,7 @@ import {
   DatabaseMessage,
   ConversationParticipantProfile,
 } from './types';
-import { DirectConversationPreview, DirectMessage, UserSummary } from '@/types';
-import { MOCK_CONVERSATIONS, MOCK_MESSAGES, MOCK_MEMBERS } from '@/data/mockData';
+import { DirectConversationPreview, DirectMessage } from '@/types';
 import { formatConversationTime, formatMessageTime } from '@/utils';
 
 /**
@@ -26,7 +25,7 @@ export async function fetchConversations(
   currentUserId: string
 ): Promise<DirectConversationPreview[]> {
   if (!isSupabaseConfigured || !currentUserId) {
-    return MOCK_CONVERSATIONS;
+    return [];
   }
 
   try {
@@ -37,11 +36,7 @@ export async function fetchConversations(
       .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
-    if (convError) {
-      return MOCK_CONVERSATIONS;
-    }
-
-    if (!convData || convData.length === 0) {
+    if (convError || !convData || convData.length === 0) {
       return [];
     }
 
@@ -108,7 +103,7 @@ export async function fetchConversations(
       };
     });
   } catch {
-    return MOCK_CONVERSATIONS;
+    return [];
   }
 }
 
@@ -119,13 +114,7 @@ export async function fetchRegisteredMembers(
   currentUserId: string
 ): Promise<ConversationParticipantProfile[]> {
   if (!isSupabaseConfigured || !currentUserId) {
-    return MOCK_MEMBERS.filter((m: UserSummary) => m.id !== 'user_current').map((m: UserSummary) => ({
-      id: m.id,
-      username: m.username,
-      displayName: m.displayName,
-      avatarUrl: m.avatarUrl || null,
-      isOnline: m.isOnline ?? false,
-    }));
+    return [];
   }
 
   try {
@@ -160,11 +149,9 @@ export async function getOrCreateConversation(
   targetUserId: string
 ): Promise<{ conversationId: string | null; error: string | null }> {
   if (!isSupabaseConfigured) {
-    // Demo mode: match existing mock conversation or generate consistent ID
-    const found = MOCK_CONVERSATIONS.find((c) => c.participantId === targetUserId);
     return {
-      conversationId: found ? found.id : `conv_demo_${targetUserId}`,
-      error: null,
+      conversationId: null,
+      error: 'Supabase configuration required to create conversations.',
     };
   }
 
@@ -196,7 +183,7 @@ export async function fetchMessages(
   limit = 50
 ): Promise<DirectMessage[]> {
   if (!isSupabaseConfigured || !currentUserId) {
-    return MOCK_MESSAGES[conversationId] || [];
+    return [];
   }
 
   try {
@@ -208,7 +195,7 @@ export async function fetchMessages(
       .limit(limit);
 
     if (error || !data) {
-      return MOCK_MESSAGES[conversationId] || [];
+      return [];
     }
 
     const messages = data as DatabaseMessage[];
@@ -224,7 +211,7 @@ export async function fetchMessages(
       status: m.read_at ? 'read' : 'delivered',
     }));
   } catch {
-    return MOCK_MESSAGES[conversationId] || [];
+    return [];
   }
 }
 
@@ -247,18 +234,7 @@ export async function sendDirectMessage(
   }
 
   if (!isSupabaseConfigured || !currentUserId) {
-    // Demo mode: Return local optimistic message
-    const mockMsg: DirectMessage = {
-      id: `local_m_${Date.now()}`,
-      conversationId,
-      senderId: currentUserId || 'user_current',
-      senderName: 'You',
-      content: trimmed,
-      createdAt: formatMessageTime(new Date().toISOString()),
-      isOutgoing: true,
-      status: 'delivered',
-    };
-    return { data: mockMsg, error: null };
+    return { data: null, error: 'Supabase configuration required to send messages.' };
   }
 
   try {
@@ -325,7 +301,6 @@ export function subscribeToConversationMessages(
       },
       (payload) => {
         const raw = payload.new as DatabaseMessage;
-        // Don't duplicate self-sent messages if already handled optimistically
         const isOutgoing = raw.sender_id === currentUserId;
         const msg: DirectMessage = {
           id: raw.id,

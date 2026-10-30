@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -13,20 +13,34 @@ import {
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
 
+type RegistrationStep = 'email_input' | 'verify_otp' | 'set_password';
+
 export default function RegisterScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { signUp, capacity } = useAuth();
+  const { requestEmailOtp, verifyEmailOtp, setPasswordAndProfile, capacity } = useAuth();
 
+  const [step, setStep] = useState<RegistrationStep>('email_input');
+
+  // Step 1: User Details & Email
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+
+  // Step 2: Verification Code
+  const [otpCode, setOtpCode] = useState('');
+  const [demoCodeHint, setDemoCodeHint] = useState<string | null>(null);
+
+  // Step 3: Password Setup
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // UI States
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRegister = async () => {
+  // 1. Submit Email & Request OTP
+  const handleRequestOtp = async () => {
     setGeneralError('');
     const newErrors: Record<string, string> = {};
 
@@ -34,12 +48,71 @@ export default function RegisterScreen() {
       newErrors.name = 'Full name is required';
     }
 
-    const cleanEmail = email.trim();
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (!cleanUsername) {
+      newErrors.username = 'Username is required';
+    } else if (cleanUsername.length < 3) {
+      newErrors.username = 'Minimum 3 characters';
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
       newErrors.email = 'Email address is required';
-    } else if (!cleanEmail.includes('@')) {
-      newErrors.email = 'Enter a valid email format';
+    } else if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      newErrors.email = 'Enter a valid email address';
     }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setIsLoading(true);
+
+    const result = await requestEmailOtp(cleanEmail);
+    setIsLoading(false);
+
+    if (result.error) {
+      setGeneralError(result.error);
+    } else {
+      if (result.demoCode) {
+        setDemoCodeHint(result.demoCode);
+      }
+      setStep('verify_otp');
+    }
+  };
+
+  // 2. Verify Email OTP Code
+  const handleVerifyOtp = async () => {
+    setGeneralError('');
+    if (!otpCode.trim()) {
+      setErrors({ otp: 'Please enter the 6-digit code' });
+      return;
+    }
+
+    if (otpCode.trim().length < 6) {
+      setErrors({ otp: 'Code must be 6 digits' });
+      return;
+    }
+
+    setErrors({});
+    setIsLoading(true);
+
+    const result = await verifyEmailOtp(email.trim(), otpCode.trim());
+    setIsLoading(false);
+
+    if (result.error) {
+      setGeneralError(result.error);
+    } else {
+      setStep('set_password');
+    }
+  };
+
+  // 3. Set Password & Finalize Account
+  const handleSetPassword = async () => {
+    setGeneralError('');
+    const newErrors: Record<string, string> = {};
 
     if (!password) {
       newErrors.password = 'Password is required';
@@ -59,14 +132,28 @@ export default function RegisterScreen() {
     setErrors({});
     setIsLoading(true);
 
-    const result = await signUp(cleanEmail, password, name.trim());
+    const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const result = await setPasswordAndProfile(password, name.trim(), cleanUser);
     setIsLoading(false);
 
     if (result.error) {
       setGeneralError(result.error);
     } else {
-      router.push('/chats');
+      router.replace('/chats');
     }
+  };
+
+  const getSubtitle = () => {
+    if (capacity.isFull) {
+      return 'Registration Closed (All 10 slots filled)';
+    }
+    if (step === 'email_input') {
+      return `Step 1 of 3: Enter Details (${capacity.activeMembers} of ${capacity.maxMembers} slots claimed)`;
+    }
+    if (step === 'verify_otp') {
+      return 'Step 2 of 3: Email Verification';
+    }
+    return 'Step 3 of 3: Set Master Password';
   };
 
   return (
@@ -74,13 +161,17 @@ export default function RegisterScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title="Create Account"
-          subtitle={
-            capacity.isFull
-              ? 'Registration Closed (All 10 slots filled)'
-              : `Slot Available (${capacity.activeMembers} of ${capacity.maxMembers} claimed)`
-          }
+          subtitle={getSubtitle()}
           showBack
-          onBack={() => router.back()}
+          onBack={() => {
+            if (step === 'set_password') {
+              setStep('verify_otp');
+            } else if (step === 'verify_otp') {
+              setStep('email_input');
+            } else {
+              router.back();
+            }
+          }}
         />
 
         <KeyboardAvoidingView
@@ -96,17 +187,39 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
           >
             <AppCard style={[styles.formCard, { gap: spacing.md }]}>
-              <ThemedText variant="h3">
-                Member Registration
-              </ThemedText>
-              <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                Membership is strictly restricted to {capacity.maxMembers} verified participants.
-              </ThemedText>
+              {/* Header based on current step */}
+              {step === 'email_input' ? (
+                <>
+                  <ThemedText variant="h3">Member Registration</ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
+                    Membership is strictly restricted to {capacity.maxMembers} verified participants.
+                  </ThemedText>
+                </>
+              ) : null}
 
+              {step === 'verify_otp' ? (
+                <>
+                  <ThemedText variant="h3">Verify Your Email</ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
+                    We sent a 6-digit confirmation code to {email}.
+                  </ThemedText>
+                </>
+              ) : null}
+
+              {step === 'set_password' ? (
+                <>
+                  <ThemedText variant="h3">Set Master Password</ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
+                    Email verified. Create your private master password for future logins.
+                  </ThemedText>
+                </>
+              ) : null}
+
+              {/* Full Capacity Alert */}
               {capacity.isFull ? (
                 <View
                   style={[
-                    styles.fullCapacityBanner,
+                    styles.bannerBox,
                     {
                       borderColor: colors.border,
                       backgroundColor: colors.surfaceSecondary,
@@ -125,10 +238,11 @@ export default function RegisterScreen() {
                 </View>
               ) : null}
 
+              {/* General Error Banner */}
               {Boolean(generalError) ? (
                 <View
                   style={[
-                    styles.errorBanner,
+                    styles.bannerBox,
                     {
                       borderColor: colors.border,
                       backgroundColor: colors.surfaceSecondary,
@@ -143,98 +257,183 @@ export default function RegisterScreen() {
                 </View>
               ) : null}
 
-              <AppTextInput
-                label="Full Name"
-                placeholder="e.g. Alex Vance"
-                value={name}
-                onChangeText={(t) => {
-                  setName(t);
-                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                }}
-                error={errors.name}
-                autoCapitalize="words"
-                onClear={() => setName('')}
-                editable={!capacity.isFull}
-              />
+              {/* Demo OTP Notice (when Supabase is unconfigured) */}
+              {Boolean(demoCodeHint) && step === 'verify_otp' ? (
+                <View
+                  style={[
+                    styles.bannerBox,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderRadius: radius.md,
+                      padding: spacing.sm + 2,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="label" tone="muted" style={{ textAlign: 'center' }}>
+                    DEMO OTP CODE: {demoCodeHint}
+                  </ThemedText>
+                </View>
+              ) : null}
 
-              <AppTextInput
-                label="Email Address"
-                placeholder="name@domain.com"
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
-                }}
-                error={errors.email}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                onClear={() => setEmail('')}
-                editable={!capacity.isFull}
-              />
+              {/* STEP 1: Email & Details */}
+              {step === 'email_input' ? (
+                <>
+                  <AppTextInput
+                    label="Full Name"
+                    placeholder="e.g. Deepak Krish"
+                    value={name}
+                    onChangeText={(t) => {
+                      setName(t);
+                      if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                    }}
+                    error={errors.name}
+                    autoCapitalize="words"
+                    onClear={() => setName('')}
+                    editable={!capacity.isFull}
+                  />
 
-              <AppTextInput
-                label="Master Password"
-                placeholder="Choose strong password"
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
-                }}
-                error={errors.password}
-                isPassword
-                editable={!capacity.isFull}
-              />
+                  <AppTextInput
+                    label="Username"
+                    placeholder="e.g. deepakkrish"
+                    value={username}
+                    onChangeText={(t) => {
+                      setUsername(t);
+                      if (errors.username) setErrors((prev) => ({ ...prev, username: '' }));
+                    }}
+                    error={errors.username}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onClear={() => setUsername('')}
+                    editable={!capacity.isFull}
+                  />
 
-              <AppTextInput
-                label="Confirm Password"
-                placeholder="Repeat master password"
-                value={confirmPassword}
-                onChangeText={(t) => {
-                  setConfirmPassword(t);
-                  if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: '' }));
-                }}
-                error={errors.confirmPassword}
-                isPassword
-                editable={!capacity.isFull}
-              />
+                  <AppTextInput
+                    label="Email Address"
+                    placeholder="name@domain.com"
+                    value={email}
+                    onChangeText={(t) => {
+                      setEmail(t);
+                      if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                    }}
+                    error={errors.email}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onClear={() => setEmail('')}
+                    editable={!capacity.isFull}
+                  />
 
-              <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
-                <AppButton
-                  title={capacity.isFull ? 'Registration Locked' : 'Complete Registration'}
-                  variant="primary"
-                  loading={isLoading}
-                  disabled={capacity.isFull}
-                  onPress={handleRegister}
-                />
+                  <AppButton
+                    title={isLoading ? 'Sending Code…' : 'Send Verification Code'}
+                    onPress={handleRequestOtp}
+                    loading={isLoading}
+                    disabled={capacity.isFull || isLoading}
+                    style={{ marginTop: spacing.xs }}
+                  />
+                </>
+              ) : null}
 
-                <AppButton
-                  title="Already registered? Sign in"
-                  variant="outline"
-                  onPress={() => router.back()}
-                />
-              </View>
+              {/* STEP 2: Enter Verification OTP */}
+              {step === 'verify_otp' ? (
+                <>
+                  <AppTextInput
+                    label="Verification Code (6 Digits)"
+                    placeholder="e.g. 123456"
+                    value={otpCode}
+                    onChangeText={(t) => {
+                      setOtpCode(t);
+                      if (errors.otp) setErrors((prev) => ({ ...prev, otp: '' }));
+                    }}
+                    error={errors.otp}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onClear={() => setOtpCode('')}
+                  />
+
+                  <AppButton
+                    title={isLoading ? 'Verifying…' : 'Verify Code'}
+                    onPress={handleVerifyOtp}
+                    loading={isLoading}
+                    disabled={isLoading}
+                    style={{ marginTop: spacing.xs }}
+                  />
+
+                  <View style={styles.resendRow}>
+                    <Pressable
+                      onPress={handleRequestOtp}
+                      disabled={isLoading}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <ThemedText variant="caption" tone="secondary">
+                        Didn’t receive code? Resend
+                      </ThemedText>
+                    </Pressable>
+                    <ThemedText variant="caption" tone="muted"> • </ThemedText>
+                    <Pressable
+                      onPress={() => setStep('email_input')}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+                    >
+                      <ThemedText variant="caption" tone="secondary">
+                        Change Email
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+
+              {/* STEP 3: Set Password */}
+              {step === 'set_password' ? (
+                <>
+                  <AppTextInput
+                    label="Create Master Password"
+                    placeholder="Minimum 6 characters"
+                    value={password}
+                    onChangeText={(t) => {
+                      setPassword(t);
+                      if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+                    }}
+                    error={errors.password}
+                    isPassword
+                  />
+
+                  <AppTextInput
+                    label="Confirm Master Password"
+                    placeholder="Repeat master password"
+                    value={confirmPassword}
+                    onChangeText={(t) => {
+                      setConfirmPassword(t);
+                      if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: '' }));
+                    }}
+                    error={errors.confirmPassword}
+                    isPassword
+                  />
+
+                  <AppButton
+                    title={isLoading ? 'Saving Password…' : 'Set Password & Complete'}
+                    onPress={handleSetPassword}
+                    loading={isLoading}
+                    disabled={isLoading}
+                    style={{ marginTop: spacing.xs }}
+                  />
+                </>
+              ) : null}
             </AppCard>
 
-            <View
-              style={[
-                styles.infoBox,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.surfaceSecondary,
-                  borderRadius: radius.md,
-                  padding: spacing.md,
-                  marginTop: spacing.md,
-                },
-              ]}
-            >
-              <ThemedText variant="label" tone="muted" style={{ marginBottom: 4 }}>
-                ZERO-METADATA & HARD-LIMIT POLICY
+            {/* Back to Login link */}
+            <View style={[styles.loginFooter, { marginTop: spacing.lg }]}>
+              <ThemedText variant="caption" tone="muted">
+                Already registered?{' '}
               </ThemedText>
-              <ThemedText variant="caption" tone="secondary">
-                No phone number or contact synchronisation required. The 10-member ceiling is
-                atomically enforced at the database level with transaction isolation locks.
-              </ThemedText>
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={8}
+                style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+              >
+                <ThemedText variant="caption" tone="primary" style={styles.loginLink}>
+                  Sign in to private network
+                </ThemedText>
+              </Pressable>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -254,21 +453,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    maxWidth: 480,
-    width: '100%',
-    alignSelf: 'center',
-    paddingBottom: 24,
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   formCard: {
     width: '100%',
   },
-  fullCapacityBanner: {
+  bannerBox: {
     borderWidth: 1,
   },
-  errorBanner: {
-    borderWidth: 1,
+  resendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 6,
   },
-  infoBox: {
-    borderWidth: 1,
+  loginFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginLink: {
+    textDecorationLine: 'underline',
   },
 });

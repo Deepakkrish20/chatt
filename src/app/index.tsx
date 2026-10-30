@@ -12,30 +12,41 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
+import { IN_BUILT_USER } from '@/data/mockData';
 
 export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { user, signIn, capacity, isConfigured, isLoading: isAuthRestoring } = useAuth();
+  const {
+    user,
+    signIn,
+    capacity,
+    isConfigured,
+    wasSessionExpired,
+    clearSessionExpiredFlag,
+    isLoading: isAuthRestoring,
+  } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // In-built user pre-fill
+  const [email, setEmail] = useState(IN_BUILT_USER.email);
+  const [password, setPassword] = useState(IN_BUILT_USER.password);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // If already authenticated via session restoration, offer quick resume
+  // If already authenticated via restored session, skip sign-in screen
   useEffect(() => {
-    if (user && !isLoading) {
+    if (user && !isLoading && !isAuthRestoring) {
       router.replace('/chats');
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, isAuthRestoring]);
 
   const handleSignIn = async () => {
     let hasError = false;
     setEmailError('');
     setPasswordError('');
     setAuthError('');
+    clearSessionExpiredFlag();
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
@@ -60,7 +71,7 @@ export default function WelcomeSignInScreen() {
     if (result.error) {
       setAuthError(result.error);
     } else {
-      router.push('/chats');
+      router.replace('/chats');
     }
   };
 
@@ -104,7 +115,7 @@ export default function WelcomeSignInScreen() {
               </ThemedText>
 
               <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
-                Strict maximum of {capacity.maxMembers} members. Completely private,
+                Strict maximum of {capacity.maxMembers} members. Device-isolated,
                 direct one-to-one communications.
               </ThemedText>
 
@@ -121,10 +132,33 @@ export default function WelcomeSignInScreen() {
                 ]}
               >
                 <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
-                  {isConfigured ? 'SUPABASE AUTH ACTIVE' : 'LOCAL DEMO MODE'}
+                  {isConfigured ? 'SUPABASE AUTH ACTIVE' : 'SECURE LOCAL RUNTIME'}
                 </ThemedText>
               </View>
             </View>
+
+            {/* Inactivity Session Expiry Banner */}
+            {wasSessionExpired ? (
+              <View
+                style={[
+                  styles.bannerBox,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceSecondary,
+                    borderRadius: radius.md,
+                    padding: spacing.md,
+                    marginTop: spacing.md,
+                  },
+                ]}
+              >
+                <ThemedText variant="label" tone="primary" style={{ textAlign: 'center', marginBottom: 2 }}>
+                  SESSION EXPIRED (3 DAYS INACTIVITY)
+                </ThemedText>
+                <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
+                  For security, logins expire after 3 days of inactivity. Please sign in again.
+                </ThemedText>
+              </View>
+            ) : null}
 
             {/* Sign-in Form */}
             <AppCard style={[styles.formCard, { marginTop: spacing.md, gap: spacing.md }]}>
@@ -135,7 +169,7 @@ export default function WelcomeSignInScreen() {
               {Boolean(authError) ? (
                 <View
                   style={[
-                    styles.errorBanner,
+                    styles.bannerBox,
                     {
                       borderColor: colors.border,
                       backgroundColor: colors.surfaceSecondary,
@@ -186,14 +220,6 @@ export default function WelcomeSignInScreen() {
                   loading={isLoading || isAuthRestoring}
                   onPress={handleSignIn}
                 />
-
-                {!isConfigured ? (
-                  <AppButton
-                    title="Explore Mock Chats (Direct Access)"
-                    variant="secondary"
-                    onPress={() => router.push('/chats')}
-                  />
-                ) : null}
               </View>
             </AppCard>
 
@@ -313,7 +339,7 @@ const styles = StyleSheet.create({
   formCard: {
     width: '100%',
   },
-  errorBanner: {
+  bannerBox: {
     borderWidth: 1,
   },
   footerNav: {

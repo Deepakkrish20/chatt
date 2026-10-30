@@ -12,7 +12,7 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
-import { CURRENT_USER } from '@/data/mockData';
+import { IN_BUILT_USER } from '@/data/mockData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -24,9 +24,9 @@ export default function SettingsScreen() {
   const [offlineNotifications, setOfflineNotifications] = useState(false);
   const [showSignOutPrompt, setShowSignOutPrompt] = useState(false);
 
-  const displayName = profile?.display_name || user?.user_metadata?.displayName || CURRENT_USER.displayName;
-  const username = profile?.username || user?.user_metadata?.username || CURRENT_USER.username;
-  const email = user?.email || 'alex@private.chat';
+  const displayName = profile?.display_name || user?.user_metadata?.displayName || IN_BUILT_USER.displayName;
+  const username = profile?.username || user?.user_metadata?.username || IN_BUILT_USER.username;
+  const email = user?.email || IN_BUILT_USER.email;
 
   const handleSignOut = async () => {
     await signOut();

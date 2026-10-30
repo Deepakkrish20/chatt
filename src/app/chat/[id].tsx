@@ -26,14 +26,12 @@ import {
   sendDirectMessage,
   subscribeToConversationMessages,
   markConversationAsRead,
-  isSupabaseConfigured,
 } from '@/lib/supabase';
-import { MOCK_CONVERSATIONS } from '@/data/mockData';
 import { DirectMessage } from '@/types';
 
 export default function PrivateChatScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { user } = useAuth();
+  const { user, recordActivity } = useAuth();
   const params = useLocalSearchParams<{
     id: string;
     name?: string;
@@ -45,15 +43,14 @@ export default function PrivateChatScreen() {
   const currentUserId = user?.id || '';
 
   // Resolve metadata
-  const conversationMeta = MOCK_CONVERSATIONS.find((c) => c.id === conversationId);
-  const participantName = params.name || conversationMeta?.participantName || 'Peer Member';
-  const isOnline = params.online === 'true' || conversationMeta?.isOnline || false;
+  const participantName = params.name || 'Peer Member';
+  const isOnline = params.online === 'true';
 
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const isPeerTyping = false;
   const flatListRef = useRef<FlatList<DirectMessage>>(null);
 
   useEffect(() => {
@@ -139,34 +136,7 @@ export default function PrivateChatScreen() {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? data : m))
       );
-    }
-
-    // In local demo mode (when Supabase is unconfigured), simulate peer reply
-    if (!isSupabaseConfigured) {
-      setTimeout(() => {
-        setIsPeerTyping(true);
-        setTimeout(() => {
-          setIsPeerTyping(false);
-          const replies = [
-            'Acknowledged. Verified on isolated node.',
-            'Understood. Standing by for updates.',
-            'Encrypted payload received. Checking parameters now.',
-            'Copy that. Channel remains clear.',
-          ];
-          const randomReply = replies[Math.floor(Math.random() * replies.length)];
-          const replyMessage: DirectMessage = {
-            id: `m_reply_${Date.now()}`,
-            conversationId,
-            senderId: 'peer',
-            senderName: participantName,
-            content: randomReply,
-            createdAt: 'Just now',
-            isOutgoing: false,
-            status: 'read',
-          };
-          setMessages((prev) => [...prev, replyMessage]);
-        }, 1200);
-      }, 800);
+      recordActivity();
     }
   };
 
