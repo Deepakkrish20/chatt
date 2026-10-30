@@ -12,6 +12,7 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
+import { MOCK_NETWORK_STATUS } from '@/data/mockData';
 
 export default function RegisterScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -19,15 +20,45 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!name.trim()) {
+      newErrors.name = 'Full name is required';
+    }
+
+    if (!email.trim()) {
+      newErrors.email = 'Email address is required';
+    } else if (!email.includes('@')) {
+      newErrors.email = 'Enter a valid email format';
+    }
+
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (password.length < 6) {
+      newErrors.password = 'Minimum 6 characters required';
+    }
+
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     setIsLoading(true);
-    // Local mock registration
+
     setTimeout(() => {
       setIsLoading(false);
       router.push('/chats');
-    }, 350);
+    }, 400);
   };
 
   return (
@@ -35,7 +66,7 @@ export default function RegisterScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title="Create Account"
-          subtitle={`Slot Available (4 of ${MAX_REGISTERED_MEMBERS} claimed)`}
+          subtitle={`Slot Available (${MOCK_NETWORK_STATUS.activeMembers} of ${MOCK_NETWORK_STATUS.maxMembers} claimed)`}
           showBack
           onBack={() => router.back()}
         />
@@ -47,8 +78,9 @@ export default function RegisterScreen() {
           <ScrollView
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
+              { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
             ]}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <AppCard style={[styles.formCard, { gap: spacing.md }]}>
@@ -56,31 +88,46 @@ export default function RegisterScreen() {
                 Member Registration
               </ThemedText>
               <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                Membership is strictly restricted to 10 verified participants.
+                Membership is strictly restricted to {MAX_REGISTERED_MEMBERS} verified participants.
               </ThemedText>
 
               <AppTextInput
                 label="Full Name"
                 placeholder="e.g. Alex Vance"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(t) => {
+                  setName(t);
+                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                }}
+                error={errors.name}
                 autoCapitalize="words"
+                onClear={() => setName('')}
               />
 
               <AppTextInput
                 label="Email Address"
                 placeholder="name@domain.com"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                }}
+                error={errors.email}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                onClear={() => setEmail('')}
               />
 
               <AppTextInput
                 label="Master Password"
                 placeholder="Choose strong password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+                }}
+                error={errors.password}
                 isPassword
               />
 
@@ -88,7 +135,11 @@ export default function RegisterScreen() {
                 label="Confirm Password"
                 placeholder="Repeat master password"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={(t) => {
+                  setConfirmPassword(t);
+                  if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: '' }));
+                }}
+                error={errors.confirmPassword}
                 isPassword
               />
 
@@ -108,12 +159,23 @@ export default function RegisterScreen() {
               </View>
             </AppCard>
 
-            <View style={[styles.infoBox, { borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg }]}>
+            <View
+              style={[
+                styles.infoBox,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceSecondary,
+                  borderRadius: radius.md,
+                  padding: spacing.md,
+                  marginTop: spacing.md,
+                },
+              ]}
+            >
               <ThemedText variant="label" tone="muted" style={{ marginBottom: 4 }}>
                 ZERO-METADATA POLICY
               </ThemedText>
               <ThemedText variant="caption" tone="secondary">
-                No phone number or contact synchronisation required. All exchanges are
+                No phone number or contact synchronisation required. All communications are
                 isolated directly between the sender and recipient.
               </ThemedText>
             </View>
@@ -138,6 +200,7 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
+    paddingBottom: 24,
   },
   formCard: {
     width: '100%',

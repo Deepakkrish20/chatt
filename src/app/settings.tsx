@@ -20,9 +20,9 @@ export default function SettingsScreen() {
   const [highContrastBorders, setHighContrastBorders] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
   const [offlineNotifications, setOfflineNotifications] = useState(false);
+  const [showSignOutPrompt, setShowSignOutPrompt] = useState(false);
 
   const handleSignOut = () => {
-    // Navigate back to Welcome/Sign-in
     router.replace('/');
   };
 
@@ -39,7 +39,7 @@ export default function SettingsScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingHorizontal: spacing.md, paddingVertical: spacing.lg, gap: spacing.lg },
+            { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.md },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -58,28 +58,59 @@ export default function SettingsScreen() {
                 <ThemedText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
                   @{CURRENT_USER.username}
                 </ThemedText>
-                <ThemedText variant="label" tone="muted" style={{ marginTop: 6 }}>
-                  MEMBER 1 OF {MOCK_NETWORK_STATUS.maxMembers} • ACTIVE
-                </ThemedText>
+                <View
+                  style={[
+                    styles.memberPill,
+                    {
+                      backgroundColor: colors.surfaceSecondary,
+                      borderColor: colors.border,
+                      borderRadius: radius.full,
+                      marginTop: 8,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="label" tone="primary" style={{ fontSize: 10 }}>
+                    MEMBER 1 OF {MOCK_NETWORK_STATUS.maxMembers} • VERIFIED
+                  </ThemedText>
+                </View>
               </View>
             </View>
           </AppCard>
 
           {/* Network Constraint Information Card */}
           <AppCard elevated>
-            <ThemedText variant="label" tone="muted">
-              MEMBER CAPACITY SPECIFICATION
-            </ThemedText>
-            <View style={[styles.networkStatusRow, { marginTop: spacing.sm }]}>
-              <ThemedText variant="bodySemibold">
-                {MOCK_NETWORK_STATUS.activeMembers} / {MOCK_NETWORK_STATUS.maxMembers} Accounts Claimed
+            <View style={styles.networkHeaderRow}>
+              <ThemedText variant="label" tone="muted">
+                NETWORK CAPACITY
               </ThemedText>
               <ThemedText variant="label" tone="muted">
-                {MOCK_NETWORK_STATUS.slotsRemaining} SLOTS REMAINING
+                {MOCK_NETWORK_STATUS.slotsRemaining} SLOTS FREE
               </ThemedText>
             </View>
-            <ThemedText variant="caption" tone="secondary" style={{ marginTop: spacing.xs }}>
-              This private instance enforces a maximum limit of 10 registered accounts.
+
+            <View style={[styles.networkStatusRow, { marginTop: spacing.xs + 2 }]}>
+              <ThemedText variant="bodySemibold">
+                {MOCK_NETWORK_STATUS.activeMembers} of {MOCK_NETWORK_STATUS.maxMembers} Accounts Claimed
+              </ThemedText>
+
+              <View style={styles.slotDots}>
+                {Array.from({ length: MOCK_NETWORK_STATUS.maxMembers }).map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.slotDot,
+                      {
+                        backgroundColor: i < MOCK_NETWORK_STATUS.activeMembers ? colors.text : 'transparent',
+                        borderColor: colors.textMuted,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <ThemedText variant="caption" tone="secondary" style={{ marginTop: spacing.sm }}>
+              This private instance enforces a strict ceiling of {MOCK_NETWORK_STATUS.maxMembers} registered accounts.
               Only direct 1:1 messaging is permitted; group chats are disabled.
             </ThemedText>
           </AppCard>
@@ -93,9 +124,9 @@ export default function SettingsScreen() {
             <AppCard style={{ gap: spacing.md }}>
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
-                  <ThemedText variant="bodyMedium">Theme System</ThemedText>
+                  <ThemedText variant="bodyMedium">Monochrome Theme</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
-                    Monochrome OLED True Black (#000000)
+                    OLED True Black (#000000)
                   </ThemedText>
                 </View>
                 <View
@@ -176,13 +207,40 @@ export default function SettingsScreen() {
             </AppCard>
           </View>
 
-          {/* Sign Out Button */}
-          <View style={{ marginTop: spacing.sm }}>
-            <AppButton
-              title="Sign Out (Return to Welcome)"
-              variant="secondary"
-              onPress={handleSignOut}
-            />
+          {/* Sign Out Card / Action */}
+          <View style={{ marginTop: spacing.xs, marginBottom: spacing.lg }}>
+            {showSignOutPrompt ? (
+              <AppCard style={{ gap: spacing.md, borderColor: colors.textMuted }}>
+                <ThemedText variant="bodyMedium" style={{ textAlign: 'center' }}>
+                  Confirm Sign Out?
+                </ThemedText>
+                <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
+                  You will return to the Welcome screen. Local session data remains encrypted.
+                </ThemedText>
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: 4 }}>
+                  <View style={{ flex: 1 }}>
+                    <AppButton
+                      title="Cancel"
+                      variant="outline"
+                      onPress={() => setShowSignOutPrompt(false)}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppButton
+                      title="Sign Out"
+                      variant="primary"
+                      onPress={handleSignOut}
+                    />
+                  </View>
+                </View>
+              </AppCard>
+            ) : (
+              <AppButton
+                title="Sign Out (Return to Welcome)"
+                variant="secondary"
+                onPress={() => setShowSignOutPrompt(true)}
+              />
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -213,10 +271,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  memberPill: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  networkHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   networkStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  slotDots: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  slotDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 1,
   },
   section: {
     width: '100%',

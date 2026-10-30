@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Pressable, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
+import React, { useState } from 'react';
+import { View, Pressable, StyleSheet, Animated, type ViewStyle, type StyleProp } from 'react-native';
 import { router } from 'expo-router';
 import { useAppTheme } from '@/hooks/use-theme';
 import { ThemedText } from './ThemedText';
@@ -23,6 +23,7 @@ export function ScreenHeader({
   style,
 }: ScreenHeaderProps) {
   const { colors, spacing } = useAppTheme();
+  const [backScale] = useState(() => new Animated.Value(1));
 
   const handleBack = () => {
     if (onBack) {
@@ -30,6 +31,22 @@ export function ScreenHeader({
     } else if (router.canGoBack()) {
       router.back();
     }
+  };
+
+  const handlePressIn = () => {
+    Animated.timing(backScale, {
+      toValue: 0.88,
+      duration: 80,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.timing(backScale, {
+      toValue: 1,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (
@@ -47,18 +64,19 @@ export function ScreenHeader({
     >
       <View style={styles.leftContainer}>
         {showBack && (
-          <Pressable
-            hitSlop={12}
-            onPress={handleBack}
-            style={({ pressed }) => [
-              styles.backButton,
-              { opacity: pressed ? 0.6 : 1, marginRight: spacing.sm },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <AppIcon name="back" size={20} color={colors.text} />
-          </Pressable>
+          <Animated.View style={{ transform: [{ scale: backScale }] }}>
+            <Pressable
+              hitSlop={12}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              onPress={handleBack}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <AppIcon name="back" size={20} color={colors.text} />
+            </Pressable>
+          </Animated.View>
         )}
 
         <View style={styles.titles}>
@@ -92,9 +110,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 6,
+    marginLeft: -4,
   },
   titles: {
     flex: 1,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Animated } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 
@@ -14,6 +14,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const [text, setText] = useState('');
+  const [buttonScale] = useState(() => new Animated.Value(1));
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -22,68 +23,86 @@ export function MessageComposer({
     setText('');
   };
 
+  const handlePressIn = () => {
+    Animated.timing(buttonScale, {
+      toValue: 0.9,
+      duration: 80,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.timing(buttonScale, {
+      toValue: 1,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const canSend = Boolean(text.trim());
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm + 2,
+        },
+      ]}
     >
       <View
         style={[
-          styles.container,
+          styles.inputContainer,
           {
-            backgroundColor: colors.background,
-            borderTopColor: colors.border,
+            backgroundColor: colors.inputBackground,
+            borderColor: colors.border,
+            borderRadius: radius.xl,
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm + 2,
           },
         ]}
       >
-        <View
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          multiline
           style={[
-            styles.inputContainer,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              borderRadius: radius.xl,
-              paddingHorizontal: spacing.md,
-            },
+            typography.body,
+            styles.input,
+            { color: colors.text },
           ]}
-        >
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            style={[
-              typography.body,
-              styles.input,
-              { color: colors.text },
-            ]}
-          />
+        />
 
+        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
-            disabled={!text.trim()}
+            disabled={!canSend}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
             onPress={handleSend}
             style={({ pressed }) => [
               styles.sendButton,
               {
-                backgroundColor: text.trim() ? colors.buttonPrimaryBg : colors.surfaceSecondary,
-                opacity: pressed ? 0.7 : 1,
+                backgroundColor: canSend ? colors.buttonPrimaryBg : colors.surfaceSecondary,
+                opacity: pressed ? 0.8 : 1,
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Send message"
+            accessibilityState={{ disabled: !canSend }}
           >
             <AppIcon
               name="send"
               size={14}
-              color={text.trim() ? colors.buttonPrimaryText : colors.textMuted}
+              color={canSend ? colors.buttonPrimaryText : colors.textMuted}
             />
           </Pressable>
-        </View>
+        </Animated.View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -96,7 +115,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    minHeight: 44,
+    minHeight: 46,
     maxHeight: 120,
     paddingVertical: 4,
   },
@@ -106,9 +125,9 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,

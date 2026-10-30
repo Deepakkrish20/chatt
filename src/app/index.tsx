@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -12,20 +12,41 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
+import { MOCK_NETWORK_STATUS } from '@/data/mockData';
 
 export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
   const [email, setEmail] = useState('alex@private.chat');
   const [password, setPassword] = useState('••••••••••••');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignIn = () => {
+    let hasError = false;
+    setEmailError('');
+    setPasswordError('');
+
+    if (!email.trim()) {
+      setEmailError('Email address is required');
+      hasError = true;
+    } else if (!email.includes('@')) {
+      setEmailError('Enter a valid email format');
+      hasError = true;
+    }
+
+    if (!password.trim()) {
+      setPasswordError('Password is required');
+      hasError = true;
+    }
+
+    if (hasError) return;
+
     setIsLoading(true);
-    // Local mock navigation
     setTimeout(() => {
       setIsLoading(false);
       router.push('/chats');
-    }, 350);
+    }, 400);
   };
 
   return (
@@ -38,8 +59,9 @@ export default function WelcomeSignInScreen() {
           <ScrollView
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+              { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
             ]}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             {/* Minimalist Monochrome Brand Header */}
@@ -51,11 +73,11 @@ export default function WelcomeSignInScreen() {
                     borderColor: colors.border,
                     backgroundColor: colors.surfaceElevated,
                     borderRadius: radius.md,
-                    padding: spacing.sm,
+                    padding: spacing.sm + 2,
                   },
                 ]}
               >
-                <AppIcon name="lock" size={24} color={colors.text} />
+                <AppIcon name="lock" size={26} color={colors.text} />
               </View>
 
               <ThemedText variant="display" style={styles.title}>
@@ -73,8 +95,8 @@ export default function WelcomeSignInScreen() {
             </View>
 
             {/* Sign-in Form */}
-            <AppCard style={[styles.formCard, { marginTop: spacing.xl, gap: spacing.md }]}>
-              <ThemedText variant="h3" style={{ marginBottom: spacing.xs }}>
+            <AppCard style={[styles.formCard, { marginTop: spacing.lg, gap: spacing.md }]}>
+              <ThemedText variant="h3">
                 Sign In
               </ThemedText>
 
@@ -82,16 +104,26 @@ export default function WelcomeSignInScreen() {
                 label="Email"
                 placeholder="name@domain.com"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (emailError) setEmailError('');
+                }}
+                error={emailError}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                onClear={() => setEmail('')}
               />
 
               <AppTextInput
                 label="Password"
                 placeholder="Enter password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (passwordError) setPasswordError('');
+                }}
+                error={passwordError}
                 isPassword
               />
 
@@ -112,16 +144,20 @@ export default function WelcomeSignInScreen() {
             </AppCard>
 
             {/* Registration Navigation Link */}
-            <View style={[styles.footerNav, { marginTop: spacing.lg }]}>
+            <View style={[styles.footerNav, { marginTop: spacing.md }]}>
               <ThemedText variant="caption" tone="muted">
                 New member with invite?{' '}
               </ThemedText>
-              <Text
+              <Pressable
+                hitSlop={8}
                 onPress={() => router.push('/register')}
-                style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '500' }}
+                accessibilityRole="link"
+                accessibilityLabel="Register Account"
               >
-                Register Account
-              </Text>
+                <Text style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '600' }}>
+                  Register Account
+                </Text>
+              </Pressable>
             </View>
 
             {/* Privacy & Member Constraint Banner */}
@@ -133,16 +169,34 @@ export default function WelcomeSignInScreen() {
                   backgroundColor: colors.surfaceSecondary,
                   borderRadius: radius.md,
                   padding: spacing.md,
-                  marginTop: spacing.xl,
+                  marginTop: spacing.lg,
                 },
               ]}
             >
-              <ThemedText variant="label" tone="muted" style={{ marginBottom: 4 }}>
-                NETWORK STATUS: 4 / {MAX_REGISTERED_MEMBERS} SLOTS OCCUPIED
-              </ThemedText>
-              <ThemedText variant="caption" tone="secondary">
+              <View style={styles.slotMeterRow}>
+                <ThemedText variant="label" tone="muted">
+                  SLOTS OCCUPIED: {MOCK_NETWORK_STATUS.activeMembers} / {MOCK_NETWORK_STATUS.maxMembers}
+                </ThemedText>
+                <View style={styles.slotDots}>
+                  {Array.from({ length: MAX_REGISTERED_MEMBERS }).map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.slotDot,
+                        {
+                          backgroundColor:
+                            i < MOCK_NETWORK_STATUS.activeMembers ? colors.text : 'transparent',
+                          borderColor: colors.textMuted,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <ThemedText variant="caption" tone="secondary" style={{ marginTop: 6 }}>
                 Registration is closed once member capacity reaches {MAX_REGISTERED_MEMBERS}.
-                Zero ad tracking, zero telemetry.
+                Zero ad tracking, zero analytics telemetry.
               </ThemedText>
             </View>
           </ScrollView>
@@ -174,20 +228,20 @@ const styles = StyleSheet.create({
   },
   logoBadge: {
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
-    letterSpacing: 2,
+    letterSpacing: 3,
     textAlign: 'center',
   },
   brandTag: {
-    marginTop: 6,
+    marginTop: 4,
     textAlign: 'center',
   },
   subtitle: {
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
+    marginTop: 6,
+    lineHeight: 19,
     maxWidth: 320,
   },
   formCard: {
@@ -200,6 +254,21 @@ const styles = StyleSheet.create({
   },
   constraintBanner: {
     borderWidth: 1,
+  },
+  slotMeterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    width: '100%',
+  },
+  slotDots: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  slotDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 1,
   },
 });

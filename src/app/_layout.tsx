@@ -15,20 +15,21 @@ export default function RootLayout() {
           contentStyle: {
             backgroundColor: colors.background,
           },
-          animation: 'fade',
+          animation: 'slide_from_right',
+          animationDuration: 220,
         }}
       >
         <Stack.Screen
           name="index"
           options={{
             title: 'Welcome',
+            animation: 'fade',
           }}
         />
         <Stack.Screen
           name="register"
           options={{
             title: 'Register',
-            animation: 'slide_from_right',
           }}
         />
         <Stack.Screen
@@ -42,14 +43,12 @@ export default function RootLayout() {
           name="chat/[id]"
           options={{
             title: 'Chat',
-            animation: 'slide_from_right',
           }}
         />
         <Stack.Screen
           name="settings"
           options={{
             title: 'Settings',
-            animation: 'slide_from_right',
           }}
         />
       </Stack>

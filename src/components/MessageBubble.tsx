@@ -1,24 +1,47 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
 
 export interface MessageBubbleProps {
   message: DirectMessage;
+  animate?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, animate = false }: MessageBubbleProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const isOutgoing = message.isOutgoing;
 
+  const [fadeAnim] = useState(() => new Animated.Value(animate ? 0 : 1));
+  const [slideAnim] = useState(() => new Animated.Value(animate ? 8 : 0));
+
+  useEffect(() => {
+    if (animate) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [animate, fadeAnim, slideAnim]);
+
   return (
-    <View
+    <Animated.View
       style={[
         styles.row,
         {
           justifyContent: isOutgoing ? 'flex-end' : 'flex-start',
           marginBottom: spacing.sm + 2,
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
         },
       ]}
     >
@@ -28,7 +51,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {
             borderRadius: radius.lg,
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm + 2,
+            paddingVertical: spacing.sm + 3,
             maxWidth: '82%',
           },
           isOutgoing
@@ -49,6 +72,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             typography.body,
             {
               color: isOutgoing ? colors.bubbleOutgoingText : colors.bubbleIncomingText,
+              lineHeight: 21,
             },
           ]}
         >
@@ -78,7 +102,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

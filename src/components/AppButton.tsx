@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   Text,
   StyleSheet,
   ActivityIndicator,
+  Animated,
   type PressableProps,
   type ViewStyle,
   type StyleProp,
@@ -19,6 +20,7 @@ export interface AppButtonProps extends Omit<PressableProps, 'style'> {
   size?: ButtonSize;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  icon?: React.ReactNode;
 }
 
 export function AppButton({
@@ -28,9 +30,30 @@ export function AppButton({
   loading = false,
   disabled,
   style,
+  icon,
+  onPress,
   ...rest
 }: AppButtonProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
+  const [scaleAnim] = useState(() => new Animated.Value(1));
+
+  const handlePressIn = () => {
+    if (disabled || loading) return;
+    Animated.timing(scaleAnim, {
+      toValue: 0.98,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    if (disabled || loading) return;
+    Animated.timing(scaleAnim, {
+      toValue: 1,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const getBackgroundColor = (pressed: boolean) => {
     if (disabled) return colors.surfaceElevated;
@@ -67,7 +90,7 @@ export function AppButton({
   const getPadding = () => {
     switch (size) {
       case 'sm':
-        return { paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.sm + 2, minHeight: 36 };
+        return { paddingVertical: spacing.xs + 3, paddingHorizontal: spacing.sm + 4, minHeight: 38 };
       case 'lg':
         return { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, minHeight: 52 };
       case 'md':
@@ -79,32 +102,39 @@ export function AppButton({
   const textTypography = size === 'sm' ? typography.captionMedium : typography.bodyMedium;
 
   return (
-    <Pressable
-      disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.button,
-        {
-          backgroundColor: getBackgroundColor(pressed),
-          borderColor: getBorderColor(),
-          borderRadius: radius.md,
-        },
-        getPadding(),
-        style,
-      ]}
-      accessibilityRole="button"
-      {...rest}
-    >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? colors.buttonPrimaryText : colors.text}
-        />
-      ) : (
-        <Text style={[textTypography, { color: getTextColor(), textAlign: 'center' }]}>
-          {title}
-        </Text>
-      )}
-    </Pressable>
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
+      <Pressable
+        disabled={disabled || loading}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.button,
+          {
+            backgroundColor: getBackgroundColor(pressed),
+            borderColor: getBorderColor(),
+            borderRadius: radius.md,
+          },
+          getPadding(),
+          style,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: Boolean(disabled || loading) }}
+        {...rest}
+      >
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={variant === 'primary' ? colors.buttonPrimaryText : colors.text}
+          />
+        ) : (
+          <Text style={[textTypography, { color: getTextColor(), textAlign: 'center' }]}>
+            {icon ? `${icon} ` : ''}
+            {title}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 

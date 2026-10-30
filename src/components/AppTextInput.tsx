@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   TextInput,
   Text,
   StyleSheet,
   Pressable,
+  Animated,
   type TextInputProps,
   type StyleProp,
   type ViewStyle,
@@ -17,6 +18,7 @@ export interface AppTextInputProps extends TextInputProps {
   hint?: string;
   containerStyle?: StyleProp<ViewStyle>;
   isPassword?: boolean;
+  onClear?: () => void;
 }
 
 export function AppTextInput({
@@ -25,6 +27,9 @@ export function AppTextInput({
   hint,
   containerStyle,
   isPassword = false,
+  value,
+  onChangeText,
+  onClear,
   style,
   onFocus,
   onBlur,
@@ -33,6 +38,15 @@ export function AppTextInput({
   const { colors, spacing, radius, typography } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(!isPassword);
+  const [focusAnim] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.timing(focusAnim, {
+      toValue: isFocused ? 1 : 0,
+      duration: 150,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, focusAnim]);
 
   const handleFocus = (e: any) => {
     setIsFocused(true);
@@ -44,26 +58,40 @@ export function AppTextInput({
     onBlur?.(e);
   };
 
+  const borderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [error ? '#737373' : colors.border, colors.text],
+  });
+
   return (
     <View style={[styles.wrapper, containerStyle]}>
       {label && (
-        <Text style={[typography.label, { color: colors.textSecondary, marginBottom: spacing.xs }]}>
-          {label.toUpperCase()}
-        </Text>
+        <View style={styles.labelRow}>
+          <Text style={[typography.label, { color: isFocused ? colors.text : colors.textSecondary }]}>
+            {label.toUpperCase()}
+          </Text>
+          {error && (
+            <Text style={[typography.label, { color: colors.textSecondary, textTransform: 'none' }]}>
+              • {error}
+            </Text>
+          )}
+        </View>
       )}
 
-      <View
+      <Animated.View
         style={[
           styles.inputContainer,
           {
             backgroundColor: colors.inputBackground,
-            borderColor: isFocused ? colors.text : colors.border,
+            borderColor,
             borderRadius: radius.md,
             paddingHorizontal: spacing.md,
           },
         ]}
       >
         <TextInput
+          value={value}
+          onChangeText={onChangeText}
           placeholderTextColor={colors.textMuted}
           style={[
             typography.body,
@@ -77,21 +105,37 @@ export function AppTextInput({
           {...rest}
         />
 
+        {value && !isPassword && onClear && (
+          <Pressable
+            hitSlop={12}
+            onPress={onClear}
+            style={styles.rightAccessory}
+            accessibilityRole="button"
+            accessibilityLabel="Clear text"
+          >
+            <View style={[styles.clearBadge, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>✕</Text>
+            </View>
+          </Pressable>
+        )}
+
         {isPassword && (
           <Pressable
-            hitSlop={8}
+            hitSlop={12}
             onPress={() => setShowPassword((prev) => !prev)}
             style={styles.rightAccessory}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
           >
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            <Text style={[typography.captionMedium, { color: colors.textSecondary }]}>
               {showPassword ? 'Hide' : 'Show'}
             </Text>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
 
-      {error ? (
-        <Text style={[typography.caption, { color: colors.text, marginTop: spacing.xs }]}>
+      {!label && error ? (
+        <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.xs }]}>
           {error}
         </Text>
       ) : hint ? (
@@ -107,6 +151,12 @@ const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 6,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,5 +169,14 @@ const styles = StyleSheet.create({
   },
   rightAccessory: {
     paddingLeft: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  clearBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

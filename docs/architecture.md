@@ -5,7 +5,8 @@
 This document defines the architectural baseline and technical foundation for **Chatt**, a high-privacy, closed-circle mobile messaging application built with **Expo**, **React Native**, and **TypeScript**.
 
 - **Module 1 (Completed)**: Initialized the baseline project repository, strict TypeScript typing, Expo Router configuration, theme foundations, and empty Supabase placeholders.
-- **Module 2 (Current)**: Established the **Raw Black Monochrome UI Foundation**, complete with design tokens, reusable UI primitives, and 5 fully navigable screens powered by local mock data.
+- **Module 2 (Completed)**: Established the **Raw Black Monochrome UI Foundation**, complete with design tokens, reusable UI primitives, and 5 fully navigable screens powered by local mock data.
+- **Module 3 (Completed)**: **UI Polish & Premium Experience** — Refined tactile animations, micro-interactions, responsive keyboard avoidance, pull-to-refresh, empty & error states, visual slot meters, and peer typing simulations.
 
 ---
 
@@ -59,22 +60,22 @@ chatt/
 ├── src/
 │   ├── app/                       # Expo Router screens and layout
 │   │   ├── _layout.tsx            # Root Stack navigator, StatusBar & Theme integration
-│   │   ├── index.tsx              # 1. Welcome / Sign-in screen
-│   │   ├── register.tsx           # 2. Member registration screen
-│   │   ├── chats.tsx              # 3. Chat list & conversation previews
+│   │   ├── index.tsx              # 1. Welcome / Sign-in screen (with inline validation)
+│   │   ├── register.tsx           # 2. Member registration screen (validation & slot meter)
+│   │   ├── chats.tsx              # 3. Chat list (pull-to-refresh, slot progression bar)
 │   │   ├── chat/
-│   │   │   └── [id].tsx           # 4. Private 1:1 chat screen & composer
-│   │   └── settings.tsx           # 5. Profile & Raw Black appearance settings
+│   │   │   └── [id].tsx           # 4. Private 1:1 chat (auto-scroll, typing indicator, reply)
+│   │   └── settings.tsx           # 5. Profile & Raw Black appearance settings (sign out modal)
 │   ├── components/                # Reusable UI component library
 │   │   ├── AppAvatar.tsx          # Initial-based avatar with online indicator
-│   │   ├── AppButton.tsx          # Primary (#FFFFFF), secondary (#111111), and ghost buttons
+│   │   ├── AppButton.tsx          # Primary, secondary, outline with tactile scale feedback
 │   │   ├── AppCard.tsx            # Elevated raw black container with subtle borders
 │   │   ├── AppIcon.tsx            # Pure React Native geometric monochrome icons
-│   │   ├── AppTextInput.tsx       # Raw black input with labels, states, and password toggles
+│   │   ├── AppTextInput.tsx       # Raw black input with animated focus borders & clear action
 │   │   ├── ConversationItem.tsx   # Chat list row with snippets, timestamps, unread badge
-│   │   ├── MessageBubble.tsx      # Incoming (#111111) & outgoing (#FFFFFF) chat bubbles
-│   │   ├── MessageComposer.tsx    # Bottom message composer with send action
-│   │   ├── ScreenHeader.tsx       # Uniform top navigation header with back button
+│   │   ├── MessageBubble.tsx      # Incoming & outgoing chat bubbles with mount animation
+│   │   ├── MessageComposer.tsx    # Bottom message composer with animated send action
+│   │   ├── ScreenHeader.tsx       # Uniform top navigation header with animated back button
 │   │   ├── ThemedText.tsx         # Typography token wrapper
 │   │   ├── ThemedView.tsx         # Surface and background wrapper
 │   │   └── index.ts               # Clean component barrel export
@@ -106,7 +107,8 @@ The application is structured to add functional layers sequentially:
 
 * **Module 1 (Done)**: **Project Foundation Setup** — Repository initialization, Expo Router configuration, TypeScript contracts, Theme foundation, Supabase scaffolding, and verification.
 * **Module 2 (Done)**: **Raw Black UI Foundation** — Centralized monochrome theme, reusable UI component library, 5 core screens, and local mock navigation.
-* **Module 3 (Future)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
-* **Module 4 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`profiles`, `conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
-* **Module 5 (Future)**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
-* **Module 6 (Future)**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.
+* **Module 3 (Done)**: **UI Polish & Premium Experience** — Subtle micro-animations, keyboard handling, auto-scroll, pull-to-refresh, typing simulation, and visual constraint indicators.
+* **Module 4 (Future)**: **Authentication & Access Gatekeeping** — Account creation, login, session persistence, and server-side verification to enforce the strict 10-member ceiling.
+* **Module 5 (Future)**: **Database Schema & Row-Level Security (RLS)** — Supabase PostgreSQL tables (`profiles`, `conversations`, `messages`), real-time triggers, and strict RLS policies allowing access only to 1:1 participants.
+* **Module 6 (Future)**: **Direct 1:1 Messaging & Realtime Presence** — Live chat threads, message delivery receipts, typing indicators, and online status indicators.
+* **Module 7 (Future)**: **Media Attachments, Notifications & Polish** — Secure attachment upload (images), offline caching, push notifications, and production builds via EAS.
