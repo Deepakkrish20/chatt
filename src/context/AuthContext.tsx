@@ -5,7 +5,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { DatabaseProfile, MemberCapacityResult } from '@/lib/supabase/types';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
-import { IN_BUILT_USER } from '@/data/mockData';
+import { IN_BUILT_USER, PROVISIONED_ACCOUNTS } from '@/data/mockData';
 
 // 3 Days inactivity timeout in milliseconds (72 hours)
 export const INACTIVITY_TIMEOUT_MS = 3 * 24 * 60 * 60 * 1000;
@@ -23,6 +23,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: DatabaseProfile | null;
+  isAdmin: boolean;
   isLoading: boolean;
   isConfigured: boolean;
   wasSessionExpired: boolean;
@@ -30,7 +31,7 @@ interface AuthContextType {
   capacity: MemberCapacity;
   refreshCapacity: () => Promise<void>;
   recordActivity: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (identifier: string, password: string) => Promise<{ error: string | null }>;
   requestEmailOtp: (email: string) => Promise<{ error: string | null }>;
   verifyEmailOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   setPasswordAndProfile: (
@@ -38,6 +39,11 @@ interface AuthContextType {
     displayName: string,
     username: string
   ) => Promise<{ error: string | null }>;
+  adminCreateMember: (
+    username: string,
+    displayName: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -50,11 +56,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [wasSessionExpired, setWasSessionExpired] = useState(false);
   const [capacity, setCapacity] = useState<MemberCapacity>({
-    activeMembers: 1, // Pre-seeded with Deepak Krish
+    activeMembers: PROVISIONED_ACCOUNTS.length,
     maxMembers: MAX_REGISTERED_MEMBERS,
-    slotsRemaining: MAX_REGISTERED_MEMBERS - 1,
+    slotsRemaining: MAX_REGISTERED_MEMBERS - PROVISIONED_ACCOUNTS.length,
     isFull: false,
   });
+
+  const isAdmin = Boolean(
+    profile?.username?.toLowerCase() === 'deepak' ||
+    user?.email?.toLowerCase() === IN_BUILT_USER.email.toLowerCase()
+  );
 
   // Track user activity timestamp
   const recordActivity = useCallback(async () => {
@@ -73,9 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshCapacity = useCallback(async () => {
     if (!isSupabaseConfigured) {
       setCapacity({
-        activeMembers: 1,
+        activeMembers: PROVISIONED_ACCOUNTS.length,
         maxMembers: MAX_REGISTERED_MEMBERS,
-        slotsRemaining: MAX_REGISTERED_MEMBERS - 1,
+        slotsRemaining: Math.max(0, MAX_REGISTERED_MEMBERS - PROVISIONED_ACCOUNTS.length),
         isFull: false,
       });
       return;
@@ -115,14 +126,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch User Profile
   const fetchProfile = useCallback(async (userId: string) => {
     if (!isSupabaseConfigured) {
-      setProfile({
-        id: userId,
-        username: IN_BUILT_USER.username,
-        display_name: IN_BUILT_USER.displayName,
-        avatar_url: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
       return;
     }
 
@@ -202,7 +205,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     async function initializeAuth() {
-      // Check 3-day inactivity first
       const expired = await checkInactivity();
       if (expired) {
         if (isMounted) setIsLoading(false);
@@ -210,7 +212,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!isSupabaseConfigured) {
-        // Check if local session was saved
         const localSaved = await AsyncStorage.getItem(SAVED_SESSION_KEY);
         if (localSaved && isMounted) {
           try {
@@ -247,7 +248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth();
 
-    // Listen to Supabase Auth State Changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         if (!isMounted) return;
@@ -271,49 +271,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchProfile, refreshCapacity, checkInactivity, recordActivity]);
 
-  // 1. Sign In with Email & Password
-  const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
-    const cleanEmail = email.trim().toLowerCase();
+  // 1. Sign In with Username or Email & Password
+  const signIn = async (
+    identifier: string,
+    password: string
+  ): Promise<{ error: string | null }> => {
+    const raw = identifier.trim().toLowerCase();
+    const cleanEmail = raw.includes('@') ? raw : `${raw}@chatt.internal`;
 
-    // Check if matching in-built user in local/offline mode
+    // Local / Offline fallback checking PROVISIONED_ACCOUNTS
     if (!isSupabaseConfigured) {
-      if (
-        cleanEmail === IN_BUILT_USER.email.toLowerCase() &&
-        password === IN_BUILT_USER.password
-      ) {
-        const adminUser = {
-          id: 'user_deepak',
-          email: IN_BUILT_USER.email,
+      const match = PROVISIONED_ACCOUNTS.find(
+        (acc) =>
+          (acc.email.toLowerCase() === cleanEmail || acc.username.toLowerCase() === raw) &&
+          acc.password === password
+      );
+
+      if (match) {
+        const localUser = {
+          id: `user_${match.username}`,
+          email: match.email,
           app_metadata: {},
-          user_metadata: {
-            displayName: IN_BUILT_USER.displayName,
-            username: IN_BUILT_USER.username,
-          },
+          user_metadata: { displayName: match.displayName, username: match.username },
           aud: 'authenticated',
           created_at: new Date().toISOString(),
         } as User;
 
-        const adminProfile: DatabaseProfile = {
-          id: 'user_deepak',
-          username: IN_BUILT_USER.username,
-          display_name: IN_BUILT_USER.displayName,
+        const localProfile: DatabaseProfile = {
+          id: `user_${match.username}`,
+          username: match.username,
+          display_name: match.displayName,
           avatar_url: null,
           status: 'online',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
-        setUser(adminUser);
-        setProfile(adminProfile);
+        setUser(localUser);
+        setProfile(localProfile);
         await AsyncStorage.setItem(
           SAVED_SESSION_KEY,
-          JSON.stringify({ user: adminUser, profile: adminProfile })
+          JSON.stringify({ user: localUser, profile: localProfile })
         );
         await recordActivity();
         return { error: null };
       }
 
-      return { error: 'Invalid credentials. For in-built access use krishdeepak748@gmail.com' };
+      return {
+        error: 'Invalid credentials. Enter a valid Member ID and password.',
+      };
     }
 
     try {
@@ -338,100 +344,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: null };
     } catch (err: unknown) {
       return {
-        error: err instanceof Error ? err.message : 'An unexpected authentication error occurred.',
+        error:
+          err instanceof Error
+            ? err.message
+            : 'An unexpected authentication error occurred.',
       };
     }
   };
 
-  // 2. Registration Step 1: Send Real Verification OTP to Email
-  const requestEmailOtp = async (
-    email: string
-  ): Promise<{ error: string | null }> => {
-    const cleanEmail = email.trim().toLowerCase();
-
+  // 2. Admin Create Member directly via RPC (No emails or SMTP needed)
+  const adminCreateMember = async (
+    username: string,
+    displayName: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured) {
-      return {
-        error:
-          'Real email dispatch requires Supabase credentials. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env to send real codes to inboxes.',
-      };
+      return { success: false, error: 'Supabase configuration required.' };
     }
 
     try {
-      const { data: capData } = await supabase.rpc('get_member_capacity');
-      if (capData && (capData as MemberCapacityResult).is_full) {
-        return {
-          error: 'Registration closed: The maximum network capacity of 10 registered members has been reached.',
-        };
-      }
-    } catch {
-      // Trigger will enforce atomically on insert
-    }
+      const { data, error } = await supabase.rpc('admin_create_member', {
+        member_username: username.trim().toLowerCase(),
+        member_display_name: displayName.trim(),
+        member_password: password,
+      });
 
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      const res = data as { success: boolean; error?: string };
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to create member.' };
+      }
+
+      await refreshCapacity();
+      return { success: true };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to create member.',
+      };
+    }
+  };
+
+  // 3. Fallback methods preserved for future reference
+  const requestEmailOtp = async (email: string): Promise<{ error: string | null }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!isSupabaseConfigured) {
+      return { error: 'Supabase configuration required.' };
+    }
     try {
       const redirectUrl =
         typeof window !== 'undefined' && window.location?.origin
           ? window.location.origin
           : 'http://localhost:8081';
-
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: redirectUrl,
-        },
+        options: { shouldCreateUser: true, emailRedirectTo: redirectUrl },
       });
-
-      if (error) {
-        return { error: error.message };
-      }
-
-      return { error: null };
+      return { error: error ? error.message : null };
     } catch (err: unknown) {
-      return {
-        error: err instanceof Error ? err.message : 'Failed to send verification code.',
-      };
+      return { error: err instanceof Error ? err.message : 'Failed to send verification code.' };
     }
   };
 
-  // 3. Registration Step 2: Verify 6-digit OTP
-  const verifyEmailOtp = async (
-    email: string,
-    token: string
-  ): Promise<{ error: string | null }> => {
+  const verifyEmailOtp = async (email: string, token: string): Promise<{ error: string | null }> => {
     const cleanEmail = email.trim().toLowerCase();
-    const cleanToken = token.trim();
-
     if (!isSupabaseConfigured) {
-      return {
-        error: 'Supabase credentials required in .env to verify codes.',
-      };
+      return { error: 'Supabase configuration required.' };
     }
-
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
-        token: cleanToken,
+        token: token.trim(),
         type: 'email',
       });
-
-      if (error) {
-        return { error: error.message };
-      }
-
+      if (error) return { error: error.message };
       if (data.session) {
         setSession(data.session);
         setUser(data.user);
       }
-
       return { error: null };
     } catch (err: unknown) {
-      return {
-        error: err instanceof Error ? err.message : 'Verification failed.',
-      };
+      return { error: err instanceof Error ? err.message : 'Verification failed.' };
     }
   };
 
-  // 4. Registration Step 3: Set Master Password & Profile Name
   const setPasswordAndProfile = async (
     password: string,
     displayName: string,
@@ -439,72 +438,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ): Promise<{ error: string | null }> => {
     const cleanName = displayName.trim();
     const cleanUser = username.trim().toLowerCase();
-
-    if (!isSupabaseConfigured) {
-      const localId = `user_${Date.now()}`;
-      const newUser = {
-        id: localId,
-        email: cleanUser + '@network.internal',
-        app_metadata: {},
-        user_metadata: { displayName: cleanName, username: cleanUser },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as User;
-
-      const newProfile: DatabaseProfile = {
-        id: localId,
-        username: cleanUser,
-        display_name: cleanName,
-        avatar_url: null,
-        status: 'online',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      setUser(newUser);
-      setProfile(newProfile);
-      await AsyncStorage.setItem(
-        SAVED_SESSION_KEY,
-        JSON.stringify({ user: newUser, profile: newProfile })
-      );
-      await recordActivity();
-      return { error: null };
-    }
-
+    if (!isSupabaseConfigured) return { error: null };
     try {
-      // 1. Update password on authenticated session
       const { data: updateData, error: updateError } = await supabase.auth.updateUser({
         password,
-        data: {
-          displayName: cleanName,
-          username: cleanUser,
-        },
+        data: { displayName: cleanName, username: cleanUser },
       });
-
-      if (updateError) {
-        return { error: updateError.message };
-      }
-
+      if (updateError) return { error: updateError.message };
       const activeUser = updateData.user || user;
       if (activeUser) {
-        // 2. Ensure profile exists with the chosen username and display name
         await supabase.from('profiles').upsert({
           id: activeUser.id,
           username: cleanUser,
           display_name: cleanName,
           updated_at: new Date().toISOString(),
         });
-
         await fetchProfile(activeUser.id);
         await recordActivity();
         await refreshCapacity();
       }
-
       return { error: null };
     } catch (err: unknown) {
-      return {
-        error: err instanceof Error ? err.message : 'Failed to finalize password and profile.',
-      };
+      return { error: err instanceof Error ? err.message : 'Failed to finalize password and profile.' };
     }
   };
 
@@ -514,6 +469,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         session,
         profile,
+        isAdmin,
         isLoading,
         isConfigured: isSupabaseConfigured,
         wasSessionExpired,
@@ -525,6 +481,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         requestEmailOtp,
         verifyEmailOtp,
         setPasswordAndProfile,
+        adminCreateMember,
         signOut,
       }}
     >

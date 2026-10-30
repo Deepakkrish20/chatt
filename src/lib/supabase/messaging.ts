@@ -16,6 +16,7 @@ import {
   ConversationParticipantProfile,
 } from './types';
 import { DirectConversationPreview, DirectMessage } from '@/types';
+import { PROVISIONED_ACCOUNTS } from '@/data/mockData';
 import { formatConversationTime, formatMessageTime } from '@/utils';
 
 /**
@@ -114,7 +115,15 @@ export async function fetchRegisteredMembers(
   currentUserId: string
 ): Promise<ConversationParticipantProfile[]> {
   if (!isSupabaseConfigured || !currentUserId) {
-    return [];
+    return PROVISIONED_ACCOUNTS.filter(
+      (a) => a.username.toLowerCase() !== currentUserId.replace('user_', '').toLowerCase()
+    ).map((a) => ({
+      id: `user_${a.username}`,
+      username: a.username,
+      displayName: a.displayName,
+      avatarUrl: null,
+      isOnline: true,
+    }));
   }
 
   try {
@@ -150,8 +159,8 @@ export async function getOrCreateConversation(
 ): Promise<{ conversationId: string | null; error: string | null }> {
   if (!isSupabaseConfigured) {
     return {
-      conversationId: null,
-      error: 'Supabase configuration required to create conversations.',
+      conversationId: `conv_${targetUserId}`,
+      error: null,
     };
   }
 
@@ -234,7 +243,19 @@ export async function sendDirectMessage(
   }
 
   if (!isSupabaseConfigured || !currentUserId) {
-    return { data: null, error: 'Supabase configuration required to send messages.' };
+    return {
+      data: {
+        id: `m_${Date.now()}`,
+        conversationId,
+        senderId: currentUserId || 'user_local',
+        senderName: 'You',
+        content: trimmed,
+        createdAt: formatMessageTime(new Date().toISOString()),
+        isOutgoing: true,
+        status: 'delivered',
+      },
+      error: null,
+    };
   }
 
   try {

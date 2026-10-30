@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Text, Pressable } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
-import { IN_BUILT_USER } from '@/data/mockData';
+import { PROVISIONED_ACCOUNTS } from '@/data/mockData';
 
 export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -26,10 +26,10 @@ export default function WelcomeSignInScreen() {
     isLoading: isAuthRestoring,
   } = useAuth();
 
-  // In-built user pre-fill
-  const [email, setEmail] = useState(IN_BUILT_USER.email);
-  const [password, setPassword] = useState(IN_BUILT_USER.password);
-  const [emailError, setEmailError] = useState('');
+  // Pre-fill with primary admin credentials
+  const [identifier, setIdentifier] = useState(PROVISIONED_ACCOUNTS[0].username);
+  const [password, setPassword] = useState(PROVISIONED_ACCOUNTS[0].password);
+  const [identifierError, setIdentifierError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,17 +43,14 @@ export default function WelcomeSignInScreen() {
 
   const handleSignIn = async () => {
     let hasError = false;
-    setEmailError('');
+    setIdentifierError('');
     setPasswordError('');
     setAuthError('');
     clearSessionExpiredFlag();
 
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setEmailError('Email address is required');
-      hasError = true;
-    } else if (!cleanEmail.includes('@')) {
-      setEmailError('Enter a valid email format');
+    const cleanId = identifier.trim();
+    if (!cleanId) {
+      setIdentifierError('Member ID or Email is required');
       hasError = true;
     }
 
@@ -65,7 +62,7 @@ export default function WelcomeSignInScreen() {
     if (hasError) return;
 
     setIsLoading(true);
-    const result = await signIn(cleanEmail, password);
+    const result = await signIn(cleanId, password);
     setIsLoading(false);
 
     if (result.error) {
@@ -73,6 +70,14 @@ export default function WelcomeSignInScreen() {
     } else {
       router.replace('/chats');
     }
+  };
+
+  const selectAccount = (acc: typeof PROVISIONED_ACCOUNTS[0]) => {
+    setIdentifier(acc.username);
+    setPassword(acc.password);
+    setIdentifierError('');
+    setPasswordError('');
+    setAuthError('');
   };
 
   return (
@@ -115,8 +120,8 @@ export default function WelcomeSignInScreen() {
               </ThemedText>
 
               <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
-                Strict maximum of {capacity.maxMembers} members. Device-isolated,
-                direct one-to-one communications.
+                Strict maximum of {capacity.maxMembers} members. Admin-provisioned,
+                direct one-to-one encrypted messaging.
               </ThemedText>
 
               {/* Status indicator pill */}
@@ -132,13 +137,13 @@ export default function WelcomeSignInScreen() {
                 ]}
               >
                 <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
-                  {isConfigured ? 'SUPABASE AUTH ACTIVE' : 'SECURE LOCAL RUNTIME'}
+                  {isConfigured ? 'SUPABASE BACKEND CONNECTED' : 'SECURE RUNTIME ACTIVE'}
                 </ThemedText>
               </View>
             </View>
 
             {/* Inactivity Session Expiry Banner */}
-            {wasSessionExpired ? (
+            {Boolean(wasSessionExpired) ? (
               <View
                 style={[
                   styles.bannerBox,
@@ -163,7 +168,7 @@ export default function WelcomeSignInScreen() {
             {/* Sign-in Form */}
             <AppCard style={[styles.formCard, { marginTop: spacing.md, gap: spacing.md }]}>
               <ThemedText variant="h3">
-                Sign In
+                Member Sign In
               </ThemedText>
 
               {Boolean(authError) ? (
@@ -185,19 +190,18 @@ export default function WelcomeSignInScreen() {
               ) : null}
 
               <AppTextInput
-                label="Email"
-                placeholder="name@domain.com"
-                value={email}
+                label="Member ID / Username / Email"
+                placeholder="e.g. deepak or jana"
+                value={identifier}
                 onChangeText={(t) => {
-                  setEmail(t);
-                  if (emailError) setEmailError('');
+                  setIdentifier(t);
+                  if (identifierError) setIdentifierError('');
                   if (authError) setAuthError('');
                 }}
-                error={emailError}
-                keyboardType="email-address"
+                error={identifierError}
                 autoCapitalize="none"
                 autoCorrect={false}
-                onClear={() => setEmail('')}
+                onClear={() => setIdentifier('')}
               />
 
               <AppTextInput
@@ -223,27 +227,37 @@ export default function WelcomeSignInScreen() {
               </View>
             </AppCard>
 
-            {/* Registration Navigation Link */}
-            <View style={[styles.footerNav, { marginTop: spacing.md }]}>
-              <ThemedText variant="caption" tone="muted">
-                {capacity.isFull ? 'Network full.' : 'New member with invite?'}{' '}
+            {/* Quick Test Accounts Switcher */}
+            <View style={[styles.accountsSection, { marginTop: spacing.md }]}>
+              <ThemedText variant="label" tone="muted" style={{ marginBottom: 8, textAlign: 'center' }}>
+                PROVISIONED MEMBER ACCOUNTS (CLICK TO AUTO-FILL)
               </ThemedText>
-              {capacity.isFull ? (
-                <ThemedText variant="caption" tone="secondary" style={{ fontWeight: '600' }}>
-                  Registration Closed
-                </ThemedText>
-              ) : (
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => router.push('/register')}
-                  accessibilityRole="link"
-                  accessibilityLabel="Register Account"
-                >
-                  <Text style={{ color: colors.text, textDecorationLine: 'underline', fontSize: 13, fontWeight: '600' }}>
-                    Register Account
-                  </Text>
-                </Pressable>
-              )}
+              <View style={styles.accountsGrid}>
+                {PROVISIONED_ACCOUNTS.map((acc) => {
+                  const isSelected = identifier.toLowerCase() === acc.username.toLowerCase();
+                  return (
+                    <Pressable
+                      key={acc.username}
+                      onPress={() => selectAccount(acc)}
+                      style={({ pressed }) => [
+                        styles.accountChip,
+                        {
+                          borderColor: isSelected ? colors.text : colors.border,
+                          backgroundColor: isSelected ? colors.surfaceSecondary : colors.surfaceElevated,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <ThemedText variant="caption" tone={isSelected ? 'primary' : 'secondary'} style={{ fontWeight: isSelected ? '600' : '400' }}>
+                        @{acc.username}
+                      </ThemedText>
+                      <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
+                        {acc.role}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
 
             {/* Privacy & Member Constraint Banner */}
@@ -255,13 +269,13 @@ export default function WelcomeSignInScreen() {
                   backgroundColor: colors.surfaceSecondary,
                   borderRadius: radius.md,
                   padding: spacing.md,
-                  marginTop: spacing.lg,
+                  marginTop: spacing.md,
                 },
               ]}
             >
               <View style={styles.slotMeterRow}>
                 <ThemedText variant="label" tone="muted">
-                  SLOTS OCCUPIED: {capacity.activeMembers} / {capacity.maxMembers}
+                  REGISTERED MEMBERS: {capacity.activeMembers} / {capacity.maxMembers}
                 </ThemedText>
                 <View style={styles.slotDots}>
                   {Array.from({ length: capacity.maxMembers }).map((_, i) => (
@@ -281,9 +295,7 @@ export default function WelcomeSignInScreen() {
               </View>
 
               <ThemedText variant="caption" tone="secondary" style={{ marginTop: 6 }}>
-                {capacity.isFull
-                  ? 'All 10 member slots are currently filled. New signups are locked.'
-                  : `Registration will close automatically once capacity reaches ${capacity.maxMembers}. Zero ad tracking, zero telemetry.`}
+                Each member logs in with their unique Member ID and password. Direct one-to-one messages are restricted solely to the two participants.
               </ThemedText>
             </View>
           </ScrollView>
@@ -342,9 +354,20 @@ const styles = StyleSheet.create({
   bannerBox: {
     borderWidth: 1,
   },
-  footerNav: {
+  accountsSection: {
+    width: '100%',
+  },
+  accountsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'center',
+  },
+  accountChip: {
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
     alignItems: 'center',
   },
   constraintBanner: {

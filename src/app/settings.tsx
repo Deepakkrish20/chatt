@@ -9,6 +9,7 @@ import {
   AppAvatar,
   AppCard,
   AppButton,
+  AppTextInput,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -16,7 +17,7 @@ import { IN_BUILT_USER } from '@/data/mockData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { user, profile, signOut, capacity, isConfigured } = useAuth();
+  const { user, profile, isAdmin, adminCreateMember, signOut, capacity, isConfigured } = useAuth();
 
   // Appearance & Privacy settings UI state
   const [highContrastBorders, setHighContrastBorders] = useState(true);
@@ -24,9 +25,38 @@ export default function SettingsScreen() {
   const [offlineNotifications, setOfflineNotifications] = useState(false);
   const [showSignOutPrompt, setShowSignOutPrompt] = useState(false);
 
+  // Admin member creation state
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberUser, setNewMemberUser] = useState('');
+  const [newMemberPass, setNewMemberPass] = useState('');
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [provisionMsg, setProvisionMsg] = useState<{ text: string; error: boolean } | null>(null);
+
   const displayName = profile?.display_name || user?.user_metadata?.displayName || IN_BUILT_USER.displayName;
   const username = profile?.username || user?.user_metadata?.username || IN_BUILT_USER.username;
   const email = user?.email || IN_BUILT_USER.email;
+
+  const handleCreateMember = async () => {
+    setProvisionMsg(null);
+    if (!newMemberName.trim() || !newMemberUser.trim() || !newMemberPass.trim()) {
+      setProvisionMsg({ text: 'All fields are required to create a member.', error: true });
+      return;
+    }
+    setIsProvisioning(true);
+    const res = await adminCreateMember(newMemberUser, newMemberName, newMemberPass);
+    setIsProvisioning(false);
+    if (res.success) {
+      setProvisionMsg({
+        text: `Member @${newMemberUser.toLowerCase().trim()} created! They can now sign in with their Member ID and password.`,
+        error: false,
+      });
+      setNewMemberName('');
+      setNewMemberUser('');
+      setNewMemberPass('');
+    } else {
+      setProvisionMsg({ text: res.error || 'Failed to create member.', error: true });
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -124,6 +154,81 @@ export default function SettingsScreen() {
               Only direct 1:1 messaging is permitted; group chats are disabled.
             </ThemedText>
           </AppCard>
+
+          {/* Admin Member Provisioning Section */}
+          {Boolean(isAdmin) ? (
+            <View style={styles.section}>
+              <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
+                ADMIN CONTROLS: PROVISION NEW MEMBER
+              </ThemedText>
+
+              <AppCard style={{ gap: spacing.sm + 2 }}>
+                <ThemedText variant="bodySemibold">
+                  Create Member Account
+                </ThemedText>
+                <ThemedText variant="caption" tone="secondary" style={{ marginTop: -4 }}>
+                  Provision credentials directly. Members log in instantly without email confirmation.
+                </ThemedText>
+
+                {Boolean(provisionMsg) ? (
+                  <View
+                    style={[
+                      styles.msgBanner,
+                      {
+                        backgroundColor: colors.surfaceSecondary,
+                        borderColor: colors.border,
+                        borderRadius: radius.sm,
+                        padding: spacing.sm,
+                      },
+                    ]}
+                  >
+                    <ThemedText
+                      variant="caption"
+                      tone={provisionMsg!.error ? 'primary' : 'secondary'}
+                      style={{ textAlign: 'center' }}
+                    >
+                      {provisionMsg!.text}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                <AppTextInput
+                  label="Display Name"
+                  placeholder="e.g. Jana Thiru"
+                  value={newMemberName}
+                  onChangeText={setNewMemberName}
+                  containerStyle={{ marginBottom: 0 }}
+                />
+
+                <AppTextInput
+                  label="Username / Member ID"
+                  placeholder="e.g. jana"
+                  value={newMemberUser}
+                  onChangeText={setNewMemberUser}
+                  autoCapitalize="none"
+                  containerStyle={{ marginBottom: 0 }}
+                />
+
+                <AppTextInput
+                  label="Temporary Password"
+                  placeholder="e.g. Jana@12345"
+                  value={newMemberPass}
+                  onChangeText={setNewMemberPass}
+                  isPassword
+                  containerStyle={{ marginBottom: 0 }}
+                />
+
+                <AppButton
+                  title={isProvisioning ? 'Creating Member…' : 'Create Member Account'}
+                  variant="primary"
+                  loading={isProvisioning}
+                  disabled={isProvisioning || capacity.isFull}
+                  onPress={handleCreateMember}
+                  style={{ marginTop: spacing.xs }}
+                />
+              </AppCard>
+            </View>
+          ) : null}
 
           {/* Appearance Settings Section */}
           <View style={styles.section}>
@@ -320,6 +425,9 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   badgePill: {
+    borderWidth: 1,
+  },
+  msgBanner: {
     borderWidth: 1,
   },
   divider: {
