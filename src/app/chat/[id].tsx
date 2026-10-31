@@ -64,7 +64,7 @@ export default function PrivateChatScreen() {
       }
     });
 
-    // Subscribe to live incoming messages
+    // Subscribe to live incoming messages & auto-sync history
     const unsubscribe = subscribeToConversationMessages(
       conversationId,
       currentUserId,
@@ -78,6 +78,10 @@ export default function PrivateChatScreen() {
           return [...prev, newMsg];
         });
         markConversationAsRead(conversationId);
+      },
+      (syncedHistory) => {
+        if (!isMounted) return;
+        setMessages(syncedHistory);
       }
     );
 

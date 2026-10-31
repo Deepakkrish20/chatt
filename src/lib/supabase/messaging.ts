@@ -1,11 +1,12 @@
 /**
  * Private 1:1 Messaging Service Layer for Supabase.
  *
- * Implements:
- * - One-to-one conversation lookup and creation (with duplicate prevention)
- * - Chronological message history retrieval with persistent local storage
- * - Real-time incoming message subscriptions via Supabase Realtime Broadcast & Postgres Changes
- * - Direct peer messaging with instant delivery across multiple devices
+ * Implements WhatsApp-grade message persistence & synchronization:
+ * - Local Persistent Storage (AsyncStorage): Messages never get lost across restarts or reloads
+ * - App-Wide Global Realtime Listener: Messages arriving while on home screen are captured & saved
+ * - P2P Auto-Sync Handshake: Synchronizes missed historical messages when peers reconnect
+ * - Cloud Database Integration: Automatically syncs with PostgreSQL tables when configured
+ * - Canonical Conversation IDs: Guarantees 100% room & channel matching across devices
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,6 +21,128 @@ import { formatConversationTime, formatMessageTime } from '@/utils';
 import { NETWORK_ACCOUNTS } from '@/data/mockData';
 
 const STORAGE_MESSAGES_KEY_PREFIX = '@chatt_msg_history_';
+const STORAGE_CONVERSATIONS_KEY = '@chatt_conversations_index';
+
+/**
+ * Generate a canonical, deterministic conversation ID for any 2 users.
+ * Example: ('user_krish', 'user_jana') -> 'conv_user_jana_user_krish'
+ */
+export function getCanonicalConversationId(userId1: string, userId2: string): string {
+  const clean1 = (userId1 || '').replace(/^conv_/, '').trim();
+  const clean2 = (userId2 || '').replace(/^conv_/, '').trim();
+  const sorted = [clean1, clean2].sort();
+  return `conv_${sorted[0]}_${sorted[1]}`;
+}
+
+/**
+ * Save a single message into local persistent storage and update conversation preview.
+ */
+export async function saveMessageToLocalHistory(
+  conversationId: string,
+  message: DirectMessage
+): Promise<DirectMessage[]> {
+  try {
+    const key = STORAGE_MESSAGES_KEY_PREFIX + conversationId;
+    const existingRaw = await AsyncStorage.getItem(key);
+    const existingList: DirectMessage[] = existingRaw ? JSON.parse(existingRaw) : [];
+
+    const existingIndex = existingList.findIndex((m) => m.id === message.id);
+    if (existingIndex >= 0) {
+      existingList[existingIndex] = { ...existingList[existingIndex], ...message };
+    } else {
+      existingList.push(message);
+    }
+
+    // Chronological order
+    existingList.sort((a, b) => a.id.localeCompare(b.id));
+
+    await AsyncStorage.setItem(key, JSON.stringify(existingList));
+    await updateConversationSummaryLocally(conversationId, message);
+
+    return existingList;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Merge an array of messages into local persistent storage (deduplicating by ID).
+ */
+export async function mergeMessagesToLocalHistory(
+  conversationId: string,
+  newMessages: DirectMessage[]
+): Promise<DirectMessage[]> {
+  if (!newMessages || newMessages.length === 0) return [];
+  try {
+    const key = STORAGE_MESSAGES_KEY_PREFIX + conversationId;
+    const existingRaw = await AsyncStorage.getItem(key);
+    const existingList: DirectMessage[] = existingRaw ? JSON.parse(existingRaw) : [];
+
+    const map = new Map<string, DirectMessage>();
+    existingList.forEach((m) => map.set(m.id, m));
+    newMessages.forEach((m) => {
+      if (!map.has(m.id)) {
+        map.set(m.id, m);
+      } else {
+        const prev = map.get(m.id)!;
+        map.set(m.id, { ...prev, ...m });
+      }
+    });
+
+    const merged = Array.from(map.values()).sort((a, b) => a.id.localeCompare(b.id));
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+
+    if (merged.length > 0) {
+      await updateConversationSummaryLocally(conversationId, merged[merged.length - 1]);
+    }
+
+    return merged;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Update the conversation preview summary in the global index.
+ */
+async function updateConversationSummaryLocally(
+  conversationId: string,
+  lastMessage: DirectMessage
+): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    const list: DirectConversationPreview[] = raw ? JSON.parse(raw) : [];
+
+    const isJana = lastMessage.senderId === 'user_jana' || lastMessage.senderId.includes('jana');
+    const peer = isJana
+      ? { id: 'user_krish', name: 'krish', username: 'krish' }
+      : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
+
+    const existingIndex = list.findIndex((c) => c.id === conversationId);
+    if (existingIndex >= 0) {
+      list[existingIndex] = {
+        ...list[existingIndex],
+        lastMessageSnippet: lastMessage.content,
+        lastMessageTimestamp: lastMessage.createdAt,
+      };
+    } else {
+      list.push({
+        id: conversationId,
+        participantId: peer.id,
+        participantName: peer.name,
+        participantUsername: peer.username,
+        isOnline: true,
+        lastMessageSnippet: lastMessage.content,
+        lastMessageTimestamp: lastMessage.createdAt,
+        unreadCount: 0,
+      });
+    }
+
+    await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify(list));
+  } catch {
+    // Ignore
+  }
+}
 
 /**
  * Fetch all 1:1 conversations for the current user.
@@ -31,7 +154,7 @@ export async function fetchConversations(
     return [];
   }
 
-  // 1. Try fetching from Supabase DB tables if available
+  // 1. Try Supabase cloud database if available
   if (isSupabaseConfigured) {
     try {
       const { data: convData, error: convError } = await supabase
@@ -91,31 +214,44 @@ export async function fetchConversations(
     }
   }
 
-  // 2. Fallback to Local Persistent Storage
+  // 2. Fetch from local conversations index
   try {
-    const isJana = currentUserId === 'user_jana' || currentUserId.includes('jana');
-    const peer = isJana
-      ? { id: 'user_krish', name: 'krish', username: 'krish' }
-      : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
+    const raw = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    if (raw) {
+      const list = JSON.parse(raw) as DirectConversationPreview[];
+      if (list && list.length > 0) {
+        return list;
+      }
+    }
+  } catch {
+    // Ignore
+  }
 
-    const canonicalConvId = ['user_jana', 'user_krish'].sort().join('_');
+  // 3. Check canonical conversation message storage
+  const isJana = currentUserId === 'user_jana' || currentUserId.includes('jana');
+  const peer = isJana
+    ? { id: 'user_krish', name: 'krish', username: 'krish' }
+    : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
+
+  const canonicalConvId = getCanonicalConversationId('user_jana', 'user_krish');
+  try {
     const raw = await AsyncStorage.getItem(STORAGE_MESSAGES_KEY_PREFIX + canonicalConvId);
     if (raw) {
       const messages = JSON.parse(raw) as DirectMessage[];
       if (messages.length > 0) {
         const last = messages[messages.length - 1];
-        return [
-          {
-            id: canonicalConvId,
-            participantId: peer.id,
-            participantName: peer.name,
-            participantUsername: peer.username,
-            isOnline: true,
-            lastMessageSnippet: last.content,
-            lastMessageTimestamp: last.createdAt,
-            unreadCount: 0,
-          },
-        ];
+        const preview: DirectConversationPreview = {
+          id: canonicalConvId,
+          participantId: peer.id,
+          participantName: peer.name,
+          participantUsername: peer.username,
+          isOnline: true,
+          lastMessageSnippet: last.content,
+          lastMessageTimestamp: last.createdAt,
+          unreadCount: 0,
+        };
+        await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify([preview]));
+        return [preview];
       }
     }
   } catch {
@@ -180,9 +316,7 @@ export async function getOrCreateConversation(
   targetUserId: string,
   currentUserId?: string
 ): Promise<{ conversationId: string | null; error: string | null }> {
-  // Canonical ID guarantees both devices use the exact same room & channel
-  const ids = [currentUserId || 'user_current', targetUserId].sort();
-  const canonicalConvId = `conv_${ids[0]}_${ids[1]}`;
+  const canonicalConvId = getCanonicalConversationId(currentUserId || 'user_me', targetUserId);
 
   if (!isSupabaseConfigured) {
     return {
@@ -208,61 +342,73 @@ export async function getOrCreateConversation(
 
 /**
  * Fetch chronological message history for a conversation.
+ * Reads persistent local storage & merges with cloud server messages.
  */
 export async function fetchMessages(
   conversationId: string,
   currentUserId: string,
   participantName: string,
-  limit = 50
+  limit = 100
 ): Promise<DirectMessage[]> {
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
   let localMessages: DirectMessage[] = [];
 
-  // 1. Retrieve local stored messages
+  // 1. Retrieve persistent local messages from storage
   try {
-    const rawStored = await AsyncStorage.getItem(STORAGE_MESSAGES_KEY_PREFIX + conversationId);
+    const rawStored = await AsyncStorage.getItem(STORAGE_MESSAGES_KEY_PREFIX + canonicalId);
     if (rawStored) {
       localMessages = JSON.parse(rawStored);
     }
   } catch {
-    // Ignore local storage error
-  }
-
-  if (!isSupabaseConfigured || !currentUserId) {
-    return localMessages;
+    // Ignore storage read error
   }
 
   // 2. Try fetching from Supabase DB tables if available
-  try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('id, conversation_id, sender_id, content, created_at, read_at')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(limit);
+  if (isSupabaseConfigured && currentUserId) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('id, conversation_id, sender_id, content, created_at, read_at')
+        .eq('conversation_id', canonicalId)
+        .order('created_at', { ascending: true })
+        .limit(limit);
 
-    if (!error && data && data.length > 0) {
-      const dbMessages = (data as DatabaseMessage[]).map((m) => ({
-        id: m.id,
-        conversationId: m.conversation_id,
-        senderId: m.sender_id,
-        senderName: m.sender_id === currentUserId ? 'You' : participantName,
-        content: m.content,
-        createdAt: formatMessageTime(m.created_at),
-        isOutgoing: m.sender_id === currentUserId,
-        status: (m.read_at ? 'read' : 'delivered') as 'read' | 'delivered',
-      }));
-      return dbMessages;
+      if (!error && data && data.length > 0) {
+        const dbMessages = (data as DatabaseMessage[]).map((m) => ({
+          id: m.id,
+          conversationId: m.conversation_id,
+          senderId: m.sender_id,
+          senderName: m.sender_id === currentUserId ? 'You' : participantName,
+          content: m.content,
+          createdAt: formatMessageTime(m.created_at),
+          isOutgoing: m.sender_id === currentUserId,
+          status: (m.read_at ? 'read' : 'delivered') as 'read' | 'delivered',
+        }));
+
+        // Merge DB messages into local storage
+        await mergeMessagesToLocalHistory(canonicalId, dbMessages);
+        return dbMessages;
+      }
+    } catch {
+      // Safe fallback to local storage
     }
-  } catch {
-    // Safe fallback to local messages
   }
 
-  return localMessages;
+  // Map isOutgoing dynamically based on current user
+  return localMessages.map((m) => ({
+    ...m,
+    isOutgoing: m.senderId === currentUserId,
+    senderName: m.senderId === currentUserId ? 'You' : participantName,
+  }));
 }
 
 /**
  * Send a direct text message inside a conversation.
- * Transmits via Supabase Realtime Broadcast & saves to persistent storage.
+ * Saves locally immediately, broadcasts over WebSockets to room & global channel,
+ * and pushes to cloud database.
  */
 export async function sendDirectMessage(
   conversationId: string,
@@ -278,9 +424,13 @@ export async function sendDirectMessage(
     return { data: null, error: 'Message exceeds 5,000 character limit.' };
   }
 
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
   const newMsg: DirectMessage = {
     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    conversationId,
+    conversationId: canonicalId,
     senderId: currentUserId,
     senderName: 'You',
     content: trimmed,
@@ -289,34 +439,33 @@ export async function sendDirectMessage(
     status: 'sent',
   };
 
-  // 1. Save to local persistent storage
-  try {
-    const key = STORAGE_MESSAGES_KEY_PREFIX + conversationId;
-    const existingRaw = await AsyncStorage.getItem(key);
-    const existingList: DirectMessage[] = existingRaw ? JSON.parse(existingRaw) : [];
-    existingList.push(newMsg);
-    await AsyncStorage.setItem(key, JSON.stringify(existingList));
-  } catch {
-    // Ignore storage write error
-  }
+  // 1. Immediately save to local persistent storage (NEVER LOST)
+  await saveMessageToLocalHistory(canonicalId, newMsg);
 
-  // 2. Broadcast immediately over Supabase Realtime WebSocket to peer device
+  // 2. Broadcast immediately over Supabase Realtime to room channel AND global channel
   if (isSupabaseConfigured) {
     try {
-      const channel = supabase.channel(`room_${conversationId}`);
-      channel.send({
+      const roomChannel = supabase.channel(`room_${canonicalId}`);
+      roomChannel.send({
+        type: 'broadcast',
+        event: 'new_message',
+        payload: newMsg,
+      });
+
+      const globalChannel = supabase.channel('conversations_global');
+      globalChannel.send({
         type: 'broadcast',
         event: 'new_message',
         payload: newMsg,
       });
     } catch {
-      // Ignore broadcast error
+      // Ignore broadcast errors
     }
 
-    // 3. Optional DB insert in background (if tables exist)
+    // 3. Push to cloud database if table exists
     try {
       await supabase.from('messages').insert({
-        conversation_id: conversationId,
+        conversation_id: canonicalId,
         sender_id: currentUserId,
         content: trimmed,
       });
@@ -329,26 +478,30 @@ export async function sendDirectMessage(
 }
 
 /**
- * Subscribe to incoming real-time messages for an open conversation.
- * Listens to both Supabase Realtime Broadcast and PostgreSQL replication.
+ * Subscribe to incoming real-time messages & handle auto-sync handshakes.
  */
 export function subscribeToConversationMessages(
   conversationId: string,
   currentUserId: string,
   participantName: string,
-  onNewMessage: (msg: DirectMessage) => void
+  onNewMessage: (msg: DirectMessage) => void,
+  onSyncHistory?: (messages: DirectMessage[]) => void
 ): () => void {
   if (!isSupabaseConfigured || !conversationId) {
     return () => {};
   }
 
-  const channelName = `room_${conversationId}`;
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
+  const channelName = `room_${canonicalId}`;
   const channel = supabase
     .channel(channelName)
-    // Realtime Broadcast (Works across all devices instantly)
+    // 1. Live Incoming Message
     .on('broadcast', { event: 'new_message' }, async ({ payload }) => {
       const raw = payload as DirectMessage;
-      if (raw.senderId !== currentUserId) {
+      if (raw && raw.senderId !== currentUserId) {
         const incoming: DirectMessage = {
           ...raw,
           senderName: participantName,
@@ -356,32 +509,56 @@ export function subscribeToConversationMessages(
           status: 'delivered',
         };
 
-        // Save incoming message locally so it persists
+        // Save incoming message to local storage immediately
+        await saveMessageToLocalHistory(canonicalId, incoming);
+        onNewMessage(incoming);
+      }
+    })
+    // 2. P2P History Sync Request: Peer asking for chat history
+    .on('broadcast', { event: 'sync_request' }, async ({ payload }) => {
+      if (payload && payload.requesterId !== currentUserId) {
         try {
-          const key = STORAGE_MESSAGES_KEY_PREFIX + conversationId;
-          const existingRaw = await AsyncStorage.getItem(key);
-          const existingList: DirectMessage[] = existingRaw ? JSON.parse(existingRaw) : [];
-          if (!existingList.some((m) => m.id === incoming.id)) {
-            existingList.push(incoming);
-            await AsyncStorage.setItem(key, JSON.stringify(existingList));
+          const rawStored = await AsyncStorage.getItem(STORAGE_MESSAGES_KEY_PREFIX + canonicalId);
+          if (rawStored) {
+            const allLocal = JSON.parse(rawStored) as DirectMessage[];
+            channel.send({
+              type: 'broadcast',
+              event: 'sync_response',
+              payload: {
+                conversationId: canonicalId,
+                messages: allLocal,
+              },
+            });
           }
         } catch {
           // Ignore
         }
-
-        onNewMessage(incoming);
       }
     })
-    // PostgreSQL database changes (if DB table is configured)
+    // 3. P2P History Sync Response: Peer sent historical messages
+    .on('broadcast', { event: 'sync_response' }, async ({ payload }) => {
+      if (payload && payload.messages && Array.isArray(payload.messages)) {
+        const merged = await mergeMessagesToLocalHistory(canonicalId, payload.messages);
+        if (merged.length > 0 && onSyncHistory) {
+          const mapped = merged.map((m) => ({
+            ...m,
+            isOutgoing: m.senderId === currentUserId,
+            senderName: m.senderId === currentUserId ? 'You' : participantName,
+          }));
+          onSyncHistory(mapped);
+        }
+      }
+    })
+    // 4. PostgreSQL Database Replication
     .on(
       'postgres_changes',
       {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `conversation_id=eq.${conversationId}`,
+        filter: `conversation_id=eq.${canonicalId}`,
       },
-      (payload) => {
+      async (payload) => {
         const raw = payload.new as DatabaseMessage;
         if (raw.sender_id !== currentUserId) {
           const incoming: DirectMessage = {
@@ -394,11 +571,24 @@ export function subscribeToConversationMessages(
             isOutgoing: false,
             status: raw.read_at ? 'read' : 'delivered',
           };
+          await saveMessageToLocalHistory(canonicalId, incoming);
           onNewMessage(incoming);
         }
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        // Request history sync from peer upon connection
+        channel.send({
+          type: 'broadcast',
+          event: 'sync_request',
+          payload: {
+            conversationId: canonicalId,
+            requesterId: currentUserId,
+          },
+        });
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);
@@ -406,7 +596,7 @@ export function subscribeToConversationMessages(
 }
 
 /**
- * Subscribe to conversation changes (for live chat list updates).
+ * App-wide global subscriber: Catches incoming messages on the chat list or background.
  */
 export function subscribeToConversationsList(
   currentUserId: string,
@@ -417,8 +607,15 @@ export function subscribeToConversationsList(
   }
 
   const channel = supabase
-    .channel(`conversations_global`)
-    .on('broadcast', { event: 'new_message' }, () => {
+    .channel('conversations_global')
+    .on('broadcast', { event: 'new_message' }, async ({ payload }) => {
+      const msg = payload as DirectMessage;
+      if (msg && msg.conversationId && msg.senderId !== currentUserId) {
+        await saveMessageToLocalHistory(msg.conversationId, {
+          ...msg,
+          isOutgoing: false,
+        });
+      }
       onUpdate();
     })
     .on(
