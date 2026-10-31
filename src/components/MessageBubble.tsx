@@ -9,6 +9,7 @@ export interface MessageBubbleProps {
   animate?: boolean;
   onLongPress?: () => void;
   onDoubleTap?: () => void;
+  searchKeyword?: string;
 }
 
 export function MessageBubble({
@@ -16,6 +17,7 @@ export function MessageBubble({
   animate = false,
   onLongPress,
   onDoubleTap,
+  searchKeyword,
 }: MessageBubbleProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const isOutgoing = message.isOutgoing;
@@ -64,6 +66,34 @@ export function MessageBubble({
   }, [message.reactions]);
 
   const hasReactions = reactionCounts.length > 0 && !isDeleted;
+
+  const renderContent = () => {
+    if (!searchKeyword || !searchKeyword.trim() || isDeleted) {
+      return message.content;
+    }
+    const keyword = searchKeyword.trim();
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const parts = message.content.split(regex);
+
+    return parts.map((part, index) => {
+      if (part.toLowerCase() === keyword.toLowerCase()) {
+        return (
+          <Text
+            key={index}
+            style={{
+              backgroundColor: '#38BDF8',
+              color: '#000000',
+              fontWeight: '700',
+            }}
+          >
+            {part}
+          </Text>
+        );
+      }
+      return part;
+    });
+  };
 
   return (
     <Animated.View
@@ -139,7 +169,7 @@ export function MessageBubble({
                 },
               ]}
             >
-              {message.content}
+              {renderContent()}
             </Text>
           )}
 

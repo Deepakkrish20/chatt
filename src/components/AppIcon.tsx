@@ -16,7 +16,9 @@ export type IconName =
   | 'dot'
   | 'more'
   | 'trash'
-  | 'ban';
+  | 'ban'
+  | 'chevron-up'
+  | 'chevron-down';
 
 export interface AppIconProps {
   name: IconName;
@@ -344,6 +346,40 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 }}
               />
             </View>
+          </View>
+        );
+
+      case 'chevron-up':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.44,
+                height: size * 0.44,
+                borderTopWidth: 2,
+                borderLeftWidth: 2,
+                borderColor: iconColor,
+                transform: [{ rotate: '45deg' }],
+                marginTop: size * 0.12,
+              }}
+            />
+          </View>
+        );
+
+      case 'chevron-down':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.44,
+                height: size * 0.44,
+                borderBottomWidth: 2,
+                borderRightWidth: 2,
+                borderColor: iconColor,
+                transform: [{ rotate: '45deg' }],
+                marginBottom: size * 0.12,
+              }}
+            />
           </View>
         );
 

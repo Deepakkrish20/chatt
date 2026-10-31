@@ -27,6 +27,8 @@ import {
   fetchRegisteredMembers,
   getOrCreateConversation,
   subscribeToConversationsList,
+  searchAllMessages,
+  MatchedMessageItem,
 } from '@/lib/supabase';
 import { ConversationParticipantProfile } from '@/lib/supabase/types';
 import { DirectConversationPreview } from '@/types';
@@ -41,6 +43,10 @@ export default function ChatListScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Deep search states
+  const [matchedDeepMessages, setMatchedDeepMessages] = useState<MatchedMessageItem[]>([]);
+  const [matchedDeepConvs, setMatchedDeepConvs] = useState<DirectConversationPreview[]>([]);
 
   // New conversation modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,7 +102,37 @@ export default function ChatListScreen() {
     setRefreshing(false);
   };
 
-  const handleOpenConversation = (conv: DirectConversationPreview) => {
+  // Deep search effect across stored message histories
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      const resetTimer = setTimeout(() => {
+        setMatchedDeepMessages([]);
+        setMatchedDeepConvs([]);
+      }, 0);
+      return () => clearTimeout(resetTimer);
+    }
+
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      searchAllMessages(currentUserId, q).then(({ matchingConversations, matchingMessages }) => {
+        if (isMounted) {
+          setMatchedDeepConvs(matchingConversations);
+          setMatchedDeepMessages(matchingMessages);
+        }
+      });
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, currentUserId]);
+
+  const handleOpenConversation = (
+    conv: DirectConversationPreview,
+    queryParam?: string
+  ) => {
     router.push({
       pathname: '/chat/[id]',
       params: {
@@ -104,6 +140,7 @@ export default function ChatListScreen() {
         name: conv.participantName,
         online: conv.isOnline ? 'true' : 'false',
         participantId: conv.participantId,
+        ...(queryParam ? { query: queryParam } : {}),
       },
     });
   };
@@ -159,6 +196,29 @@ export default function ChatListScreen() {
       conv.lastMessageSnippet.toLowerCase().includes(query)
     );
   });
+
+  // Combine conversation name matches with deep historical message matches
+  const activeConversations = React.useMemo(() => {
+    if (!searchQuery.trim()) {
+      return conversations;
+    }
+    const ids = new Set<string>();
+    const combined: DirectConversationPreview[] = [];
+
+    matchedDeepConvs.forEach((c) => {
+      ids.add(c.id);
+      combined.push(c);
+    });
+
+    filteredConversations.forEach((c) => {
+      if (!ids.has(c.id)) {
+        ids.add(c.id);
+        combined.push(c);
+      }
+    });
+
+    return combined;
+  }, [searchQuery, conversations, matchedDeepConvs, filteredConversations]);
 
   // Filter members in modal
   const filteredMembers = members.filter((m) => {
@@ -266,7 +326,7 @@ export default function ChatListScreen() {
           </View>
         ) : (
           <FlatList
-            data={filteredConversations}
+            data={activeConversations}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <ConversationItem
@@ -274,6 +334,43 @@ export default function ChatListScreen() {
                 onPress={() => handleOpenConversation(item)}
               />
             )}
+            ListFooterComponent={
+              searchQuery.trim() && matchedDeepMessages.length > 0 ? (
+                <View style={styles.matchedMessagesSection}>
+                  <View style={styles.matchedMessagesHeader}>
+                    <ThemedText variant="label" tone="muted">
+                      MESSAGES FOUND IN CHATS ({matchedDeepMessages.length})
+                    </ThemedText>
+                  </View>
+                  {matchedDeepMessages.map(({ message, conversation }) => (
+                    <Pressable
+                      key={message.id}
+                      onPress={() => handleOpenConversation(conversation, searchQuery.trim())}
+                      style={({ pressed }) => [
+                        styles.matchedMessageCard,
+                        {
+                          backgroundColor: colors.surfaceSecondary,
+                          borderColor: colors.border,
+                          opacity: pressed ? 0.75 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.matchedMessageTopRow}>
+                        <ThemedText variant="captionMedium" style={{ fontWeight: '600' }}>
+                          {conversation.participantName}
+                        </ThemedText>
+                        <ThemedText variant="label" tone="muted">
+                          {message.createdAt}
+                        </ThemedText>
+                      </View>
+                      <ThemedText variant="caption" tone="secondary" numberOfLines={2}>
+                        {message.content}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : undefined
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -674,5 +771,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+  },
+  matchedMessagesSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  matchedMessagesHeader: {
+    marginBottom: 8,
+  },
+  matchedMessageCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  matchedMessageTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
 });

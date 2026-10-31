@@ -1093,3 +1093,69 @@ export function sendTypingStatus(
     // Ignore broadcast errors
   }
 }
+
+export interface MatchedMessageItem {
+  message: DirectMessage;
+  conversation: DirectConversationPreview;
+}
+
+/**
+ * Search across all conversations and message histories for a keyword.
+ * Returns matching conversations as well as individual matching messages.
+ */
+export async function searchAllMessages(
+  currentUserId: string,
+  query: string
+): Promise<{
+  matchingConversations: DirectConversationPreview[];
+  matchingMessages: MatchedMessageItem[];
+}> {
+  const cleanQuery = query.trim().toLowerCase();
+  if (!cleanQuery || !currentUserId) {
+    return { matchingConversations: [], matchingMessages: [] };
+  }
+
+  const convs = await fetchConversations(currentUserId);
+  const matchedConvs: DirectConversationPreview[] = [];
+  const matchingMessages: MatchedMessageItem[] = [];
+
+  for (const conv of convs) {
+    let matchedInThisConv = false;
+
+    // Check contact name & last snippet
+    if (
+      conv.participantName.toLowerCase().includes(cleanQuery) ||
+      conv.participantUsername.toLowerCase().includes(cleanQuery) ||
+      conv.lastMessageSnippet.toLowerCase().includes(cleanQuery)
+    ) {
+      matchedConvs.push(conv);
+      matchedInThisConv = true;
+    }
+
+    // Deep search in message history
+    try {
+      const key = STORAGE_MESSAGES_KEY_PREFIX + conv.id;
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) {
+        const msgs: DirectMessage[] = JSON.parse(raw);
+        for (const msg of msgs) {
+          if (
+            !msg.isDeletedForEveryone &&
+            (!msg.deletedForUsers || !msg.deletedForUsers.includes(currentUserId)) &&
+            msg.content.toLowerCase().includes(cleanQuery)
+          ) {
+            matchingMessages.push({ message: msg, conversation: conv });
+            if (!matchedInThisConv) {
+              matchedConvs.push(conv);
+              matchedInThisConv = true;
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore storage read error
+    }
+  }
+
+  return { matchingConversations: matchedConvs, matchingMessages };
+}

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Pressable,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -39,13 +40,14 @@ import { DirectMessage } from '@/types';
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
 export default function PrivateChatScreen() {
-  const { colors, spacing, radius } = useAppTheme();
+  const { colors, spacing, radius, typography } = useAppTheme();
   const { user, recordActivity } = useAuth();
   const params = useLocalSearchParams<{
     id: string;
     name?: string;
     online?: string;
     participantId?: string;
+    query?: string;
   }>();
 
   const conversationId = params.id || 'conv_1';
@@ -68,6 +70,71 @@ export default function PrivateChatScreen() {
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const peerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList<DirectMessage>>(null);
+
+  // In-Chat Message Search States
+  const [isSearchActive, setIsSearchActive] = useState(Boolean(params.query));
+  const [searchQuery, setSearchQuery] = useState(params.query || '');
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
+
+  // Calculate indices of messages matching the search keyword
+  const matchingIndices = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const indices: number[] = [];
+    messages.forEach((m, idx) => {
+      if (!m.isDeletedForEveryone && m.content.toLowerCase().includes(q)) {
+        indices.push(idx);
+      }
+    });
+    return indices;
+  }, [messages, searchQuery]);
+
+  // Navigate to matching messages
+  const handleNextMatch = () => {
+    if (matchingIndices.length === 0) return;
+    const nextIdx = (currentMatchIdx + 1) % matchingIndices.length;
+    setCurrentMatchIdx(nextIdx);
+    const targetIdx = matchingIndices[nextIdx];
+    flatListRef.current?.scrollToIndex({
+      index: targetIdx,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  };
+
+  const handlePrevMatch = () => {
+    if (matchingIndices.length === 0) return;
+    const prevIdx =
+      (currentMatchIdx - 1 + matchingIndices.length) % matchingIndices.length;
+    setCurrentMatchIdx(prevIdx);
+    const targetIdx = matchingIndices[prevIdx];
+    flatListRef.current?.scrollToIndex({
+      index: targetIdx,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  };
+
+  const handleCloseSearch = () => {
+    setIsSearchActive(false);
+    setSearchQuery('');
+    setCurrentMatchIdx(0);
+  };
+
+  // Scroll to latest match when search query changes
+  useEffect(() => {
+    if (matchingIndices.length > 0) {
+      const timer = setTimeout(() => {
+        setCurrentMatchIdx(matchingIndices.length - 1);
+        flatListRef.current?.scrollToIndex({
+          index: matchingIndices[matchingIndices.length - 1],
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [matchingIndices]);
 
   useEffect(() => {
     let isMounted = true;
@@ -344,13 +411,142 @@ export default function PrivateChatScreen() {
           showBack
           onBack={() => router.back()}
           rightElement={
-            <AppAvatar
-              name={participantName}
-              size="sm"
-              isOnline={isOnline}
-            />
+            <View style={styles.headerRightGroup}>
+              <Pressable
+                hitSlop={10}
+                onPress={() => {
+                  setIsSearchActive((prev) => !prev);
+                  if (isSearchActive) {
+                    setSearchQuery('');
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.headerIconBtn,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Search messages in chat"
+              >
+                <AppIcon
+                  name="search"
+                  size={18}
+                  color={isSearchActive ? '#38BDF8' : colors.text}
+                />
+              </Pressable>
+              <AppAvatar
+                name={participantName}
+                size="sm"
+                isOnline={isOnline}
+              />
+            </View>
           }
         />
+
+        {/* In-Chat Message Search Bar */}
+        {Boolean(isSearchActive) ? (
+          <View
+            style={[
+              styles.inChatSearchContainer,
+              {
+                backgroundColor: colors.surfaceElevated,
+                borderBottomColor: colors.border,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.inChatSearchInputWrapper,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <AppIcon name="search" size={15} color={colors.textSecondary} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search in conversation…"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                style={[
+                  typography.body,
+                  styles.inChatSearchTextInput,
+                  { color: colors.text },
+                ]}
+              />
+              {Boolean(searchQuery) ? (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8} style={{ padding: 4 }}>
+                  <AppIcon name="close" size={13} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Match Counter & Next/Prev Controls */}
+            <View style={styles.inChatSearchNavGroup}>
+              {Boolean(searchQuery.trim()) ? (
+                <ThemedText
+                  variant="caption"
+                  tone="secondary"
+                  style={styles.matchCountText}
+                >
+                  {matchingIndices.length > 0
+                    ? `${currentMatchIdx + 1}/${matchingIndices.length}`
+                    : '0 found'}
+                </ThemedText>
+              ) : null}
+
+              <Pressable
+                disabled={matchingIndices.length === 0}
+                onPress={handlePrevMatch}
+                hitSlop={6}
+                style={({ pressed }) => [
+                  styles.navArrowBtn,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceSecondary,
+                    opacity: pressed || matchingIndices.length === 0 ? 0.35 : 1,
+                  },
+                ]}
+                accessibilityLabel="Previous match"
+              >
+                <AppIcon name="chevron-up" size={14} color={colors.text} />
+              </Pressable>
+
+              <Pressable
+                disabled={matchingIndices.length === 0}
+                onPress={handleNextMatch}
+                hitSlop={6}
+                style={({ pressed }) => [
+                  styles.navArrowBtn,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceSecondary,
+                    opacity: pressed || matchingIndices.length === 0 ? 0.35 : 1,
+                  },
+                ]}
+                accessibilityLabel="Next match"
+              >
+                <AppIcon name="chevron-down" size={14} color={colors.text} />
+              </Pressable>
+
+              <Pressable
+                onPress={handleCloseSearch}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.closeSearchBtn,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <ThemedText variant="captionMedium" style={{ color: '#38BDF8', marginLeft: 4 }}>
+                  Done
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* Security / Encryption Notice */}
         <View
@@ -414,12 +610,19 @@ export default function PrivateChatScreen() {
               ref={flatListRef}
               data={messages}
               keyExtractor={(item) => item.id}
+              onScrollToIndexFailed={(info) => {
+                flatListRef.current?.scrollToOffset({
+                  offset: info.averageItemLength * info.index,
+                  animated: true,
+                });
+              }}
               renderItem={({ item }) => (
                 <MessageBubble
                   message={item}
                   animate={item.id.startsWith('temp_') || item.id.startsWith('m_reply_')}
                   onLongPress={() => handleOpenMessageOptions(item)}
                   onDoubleTap={() => handleDoubleTapMessage(item)}
+                  searchKeyword={isSearchActive ? searchQuery : undefined}
                 />
               )}
               contentContainerStyle={[
@@ -439,13 +642,21 @@ export default function PrivateChatScreen() {
                       },
                     ]}
                   >
-                    <AppIcon name="lock" size={24} color={colors.text} />
+                    <AppIcon
+                      name={isSearchActive && searchQuery ? 'search' : 'lock'}
+                      size={24}
+                      color={colors.text}
+                    />
                   </View>
                   <ThemedText variant="bodyMedium" style={{ marginTop: spacing.md }}>
-                    No messages yet
+                    {isSearchActive && searchQuery
+                      ? 'No matching messages'
+                      : 'No messages yet'}
                   </ThemedText>
                   <ThemedText variant="caption" tone="secondary" style={{ marginTop: 4 }}>
-                    Send a private message to open this direct channel.
+                    {isSearchActive && searchQuery
+                      ? `No messages in this chat matched "${searchQuery}".`
+                      : 'Send a private message to open this direct channel.'}
                   </ThemedText>
                 </View>
               }
@@ -1067,5 +1278,59 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     alignItems: 'center',
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inChatSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  inChatSearchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 8,
+  },
+  inChatSearchTextInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  inChatSearchNavGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  matchCountText: {
+    fontSize: 11,
+    marginRight: 4,
+    fontWeight: '600',
+  },
+  navArrowBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeSearchBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
 });
