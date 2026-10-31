@@ -397,12 +397,188 @@ export async function fetchMessages(
     }
   }
 
-  // Map isOutgoing dynamically based on current user
-  return localMessages.map((m) => ({
+  // Map isOutgoing dynamically based on current user & filter deleted for me
+  const visibleMessages = localMessages.filter(
+    (m) => !m.deletedForUsers || !m.deletedForUsers.includes(currentUserId)
+  );
+
+  return visibleMessages.map((m) => ({
     ...m,
     isOutgoing: m.senderId === currentUserId,
     senderName: m.senderId === currentUserId ? 'You' : participantName,
   }));
+}
+
+export const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Check if a message was sent within the past 1 hour (for Delete for Everyone).
+ */
+export function isMessageWithinOneHour(message: DirectMessage): boolean {
+  const sentTime =
+    message.timestamp ||
+    (message.id.startsWith('msg_') ? parseInt(message.id.split('_')[1], 10) : 0);
+  if (!sentTime || isNaN(sentTime)) return false;
+  return Date.now() - sentTime <= ONE_HOUR_MS;
+}
+
+/**
+ * Return human-readable remaining time string for Delete for Everyone window.
+ */
+export function getRemainingDeleteTime(message: DirectMessage): string {
+  const sentTime =
+    message.timestamp ||
+    (message.id.startsWith('msg_') ? parseInt(message.id.split('_')[1], 10) : 0);
+  if (!sentTime || isNaN(sentTime)) return 'Expired';
+  const remainingMs = ONE_HOUR_MS - (Date.now() - sentTime);
+  if (remainingMs <= 0) return 'Expired';
+  const minutes = Math.floor(remainingMs / (60 * 1000));
+  return `${minutes}m remaining`;
+}
+
+/**
+ * Delete a message for everyone (both participants).
+ * Strictly enforced: Only sender can delete, and only within 1 hour from sending!
+ */
+export async function deleteMessageForEveryone(
+  conversationId: string,
+  messageId: string,
+  currentUserId: string
+): Promise<{ success: boolean; error: string | null }> {
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
+  try {
+    const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+    const raw = await AsyncStorage.getItem(key);
+    const list: DirectMessage[] = raw ? JSON.parse(raw) : [];
+
+    const targetIndex = list.findIndex((m) => m.id === messageId);
+    if (targetIndex === -1) {
+      return { success: false, error: 'Message not found.' };
+    }
+
+    const target = list[targetIndex];
+
+    // Security Check 1: Must be original sender
+    if (target.senderId !== currentUserId) {
+      return { success: false, error: 'You can only delete your own sent messages for everyone.' };
+    }
+
+    // Security Check 2: Must be within 1 hour
+    if (!isMessageWithinOneHour(target)) {
+      return {
+        success: false,
+        error: 'Delete for everyone has expired. Messages can only be deleted for everyone within 1 hour.',
+      };
+    }
+
+    // Update message locally
+    const updatedMsg: DirectMessage = {
+      ...target,
+      content: 'This message was deleted',
+      isDeletedForEveryone: true,
+    };
+    list[targetIndex] = updatedMsg;
+
+    await AsyncStorage.setItem(key, JSON.stringify(list));
+    await updateConversationSummaryLocally(canonicalId, updatedMsg);
+
+    // Broadcast delete event over Supabase Realtime
+    if (isSupabaseConfigured) {
+      try {
+        const roomChannel = supabase.channel(`room_${canonicalId}`);
+        roomChannel.send({
+          type: 'broadcast',
+          event: 'delete_message',
+          payload: {
+            conversationId: canonicalId,
+            messageId,
+            deleteType: 'for_everyone',
+          },
+        });
+
+        const globalChannel = supabase.channel('conversations_global');
+        globalChannel.send({
+          type: 'broadcast',
+          event: 'delete_message',
+          payload: {
+            conversationId: canonicalId,
+            messageId,
+            deleteType: 'for_everyone',
+          },
+        });
+      } catch {
+        // Ignore broadcast failure
+      }
+
+      // Background DB sync if available
+      try {
+        await supabase
+          .from('messages')
+          .update({ content: 'This message was deleted' })
+          .eq('id', messageId);
+      } catch {
+        // Ignore
+      }
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to delete message.',
+    };
+  }
+}
+
+/**
+ * Delete a message for that particular account alone ("Delete for me").
+ * No time limit — can be deleted anytime.
+ */
+export async function deleteMessageForMe(
+  conversationId: string,
+  messageId: string,
+  currentUserId: string
+): Promise<{ success: boolean; error: string | null }> {
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
+  try {
+    const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+    const raw = await AsyncStorage.getItem(key);
+    const list: DirectMessage[] = raw ? JSON.parse(raw) : [];
+
+    const targetIndex = list.findIndex((m) => m.id === messageId);
+    if (targetIndex === -1) {
+      return { success: false, error: 'Message not found.' };
+    }
+
+    const target = list[targetIndex];
+    const existingDeletedFor = target.deletedForUsers || [];
+    if (!existingDeletedFor.includes(currentUserId)) {
+      list[targetIndex] = {
+        ...target,
+        deletedForUsers: [...existingDeletedFor, currentUserId],
+      };
+      await AsyncStorage.setItem(key, JSON.stringify(list));
+    }
+
+    // Update conversation summary to last visible message
+    const visibleList = list.filter((m) => !m.deletedForUsers?.includes(currentUserId));
+    if (visibleList.length > 0) {
+      await updateConversationSummaryLocally(canonicalId, visibleList[visibleList.length - 1]);
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to delete message for me.',
+    };
+  }
 }
 
 /**
@@ -428,13 +604,15 @@ export async function sendDirectMessage(
     ? conversationId
     : getCanonicalConversationId(conversationId, currentUserId);
 
+  const now = Date.now();
   const newMsg: DirectMessage = {
-    id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: `msg_${now}_${Math.random().toString(36).substring(2, 7)}`,
     conversationId: canonicalId,
     senderId: currentUserId,
     senderName: 'You',
     content: trimmed,
     createdAt: formatMessageTime(new Date().toISOString()),
+    timestamp: now,
     isOutgoing: true,
     status: 'sent',
   };
@@ -485,7 +663,8 @@ export function subscribeToConversationMessages(
   currentUserId: string,
   participantName: string,
   onNewMessage: (msg: DirectMessage) => void,
-  onSyncHistory?: (messages: DirectMessage[]) => void
+  onSyncHistory?: (messages: DirectMessage[]) => void,
+  onMessageDeleted?: (messageId: string) => void
 ): () => void {
   if (!isSupabaseConfigured || !conversationId) {
     return () => {};
@@ -514,7 +693,28 @@ export function subscribeToConversationMessages(
         onNewMessage(incoming);
       }
     })
-    // 2. P2P History Sync Request: Peer asking for chat history
+    // 2. Real-time Delete Event (Delete for Everyone)
+    .on('broadcast', { event: 'delete_message' }, async ({ payload }) => {
+      if (payload && payload.messageId && payload.deleteType === 'for_everyone') {
+        const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const list: DirectMessage[] = JSON.parse(raw);
+          const idx = list.findIndex((m) => m.id === payload.messageId);
+          if (idx !== -1) {
+            list[idx] = {
+              ...list[idx],
+              content: 'This message was deleted',
+              isDeletedForEveryone: true,
+            };
+            await AsyncStorage.setItem(key, JSON.stringify(list));
+            await updateConversationSummaryLocally(canonicalId, list[idx]);
+          }
+        }
+        onMessageDeleted?.(payload.messageId);
+      }
+    })
+    // 3. P2P History Sync Request: Peer asking for chat history
     .on('broadcast', { event: 'sync_request' }, async ({ payload }) => {
       if (payload && payload.requesterId !== currentUserId) {
         try {
@@ -535,7 +735,7 @@ export function subscribeToConversationMessages(
         }
       }
     })
-    // 3. P2P History Sync Response: Peer sent historical messages
+    // 4. P2P History Sync Response: Peer sent historical messages
     .on('broadcast', { event: 'sync_response' }, async ({ payload }) => {
       if (payload && payload.messages && Array.isArray(payload.messages)) {
         const merged = await mergeMessagesToLocalHistory(canonicalId, payload.messages);
@@ -549,7 +749,7 @@ export function subscribeToConversationMessages(
         }
       }
     })
-    // 4. PostgreSQL Database Replication
+    // 5. PostgreSQL Database Replication
     .on(
       'postgres_changes',
       {
@@ -616,6 +816,9 @@ export function subscribeToConversationsList(
           isOutgoing: false,
         });
       }
+      onUpdate();
+    })
+    .on('broadcast', { event: 'delete_message' }, () => {
       onUpdate();
     })
     .on(

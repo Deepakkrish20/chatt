@@ -25,8 +25,11 @@ export interface DirectMessage {
   senderName: string;
   content: string;
   createdAt: string;
+  timestamp?: number;
   isOutgoing: boolean;
   status: 'sent' | 'delivered' | 'read';
+  isDeletedForEveryone?: boolean;
+  deletedForUsers?: string[];
 }
 
 export interface DirectConversationPreview {

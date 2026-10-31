@@ -13,7 +13,10 @@ export type IconName =
   | 'user'
   | 'plus'
   | 'close'
-  | 'dot';
+  | 'dot'
+  | 'more'
+  | 'trash'
+  | 'ban';
 
 export interface AppIconProps {
   name: IconName;
@@ -276,6 +279,71 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 transform: [{ rotate: '-45deg' }],
               }}
             />
+          </View>
+        );
+
+      case 'more':
+        return (
+          <View style={[styles.center, { width: size, height: size, flexDirection: 'row', gap: 2.5 }]}>
+            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: iconColor }} />
+            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: iconColor }} />
+            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: iconColor }} />
+          </View>
+        );
+
+      case 'trash':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.6,
+                height: 2,
+                backgroundColor: iconColor,
+                marginBottom: 2,
+                borderRadius: 1,
+              }}
+            />
+            <View
+              style={{
+                width: size * 0.44,
+                height: size * 0.48,
+                borderWidth: 1.8,
+                borderTopWidth: 0,
+                borderColor: iconColor,
+                borderBottomLeftRadius: 3,
+                borderBottomRightRadius: 3,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View style={{ width: 1.5, height: size * 0.28, backgroundColor: iconColor }} />
+            </View>
+          </View>
+        );
+
+      case 'ban':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.72,
+                height: size * 0.72,
+                borderRadius: size * 0.36,
+                borderWidth: 1.6,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.54,
+                  height: 1.6,
+                  backgroundColor: iconColor,
+                  transform: [{ rotate: '-45deg' }],
+                }}
+              />
+            </View>
           </View>
         );
 
