@@ -32,6 +32,7 @@ import {
   isMessageWithinOneHour,
   getRemainingDeleteTime,
   toggleMessageReaction,
+  sendTypingStatus,
 } from '@/lib/supabase';
 import { DirectMessage } from '@/types';
 
@@ -64,7 +65,8 @@ export default function PrivateChatScreen() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [reactionTargetMessage, setReactionTargetMessage] = useState<DirectMessage | null>(null);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
-  const isPeerTyping = false;
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const peerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList<DirectMessage>>(null);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function PrivateChatScreen() {
       }
     });
 
-    // Subscribe to live incoming messages, auto-sync history, real-time message deletions & reactions
+    // Subscribe to live incoming messages, auto-sync history, real-time message deletions, reactions & typing status
     const unsubscribe = subscribeToConversationMessages(
       conversationId,
       currentUserId,
@@ -127,14 +129,35 @@ export default function PrivateChatScreen() {
               : m
           )
         );
+      },
+      (isTyping) => {
+        if (!isMounted) return;
+        setIsPeerTyping(isTyping);
+        if (peerTypingTimeoutRef.current) {
+          clearTimeout(peerTypingTimeoutRef.current);
+        }
+        if (isTyping) {
+          // Automatic failsafe: clear typing indicator if peer disconnects or stops without packet
+          peerTypingTimeoutRef.current = setTimeout(() => {
+            if (isMounted) setIsPeerTyping(false);
+          }, 3500);
+        }
       }
     );
 
     return () => {
       isMounted = false;
+      if (peerTypingTimeoutRef.current) {
+        clearTimeout(peerTypingTimeoutRef.current);
+      }
+      sendTypingStatus(conversationId, currentUserId, false);
       unsubscribe();
     };
   }, [conversationId, currentUserId, participantName]);
+
+  const handleUserTyping = (isTyping: boolean) => {
+    sendTypingStatus(conversationId, currentUserId, isTyping);
+  };
 
   const handleOpenMessageOptions = (msg: DirectMessage) => {
     if (msg.id.startsWith('temp_')) return;
@@ -457,7 +480,11 @@ export default function PrivateChatScreen() {
           ) : null}
 
           {/* Message Composer */}
-          <MessageComposer onSendMessage={handleSendMessage} disabled={isSending} />
+          <MessageComposer
+            onSendMessage={handleSendMessage}
+            onTyping={handleUserTyping}
+            disabled={isSending}
+          />
         </KeyboardAvoidingView>
       </SafeAreaView>
 

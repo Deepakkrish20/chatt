@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 
 export interface MessageComposerProps {
   onSendMessage?: (content: string) => void;
+  onTyping?: (isTyping: boolean) => void;
   placeholder?: string;
   disabled?: boolean;
 }
 
 export function MessageComposer({
   onSendMessage,
+  onTyping,
   placeholder = 'Encrypted message…',
   disabled = false,
 }: MessageComposerProps) {
@@ -18,11 +20,46 @@ export function MessageComposer({
   const [text, setText] = useState('');
   const [buttonScale] = useState(() => new Animated.Value(1));
   const useNativeDriver = Platform.OS !== 'web';
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleTextChange = (newText: string) => {
+    setText(newText);
+
+    if (onTyping) {
+      if (newText.trim().length > 0) {
+        onTyping(true);
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        typingTimeoutRef.current = setTimeout(() => {
+          onTyping(false);
+        }, 2000);
+      } else {
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        onTyping(false);
+      }
+    }
+  };
 
   const handleSend = () => {
     if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    onTyping?.(false);
     onSendMessage?.(trimmed);
     setText('');
   };
@@ -81,7 +118,7 @@ export function MessageComposer({
       >
         <TextInput
           value={text}
-          onChangeText={setText}
+          onChangeText={handleTextChange}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           editable={!disabled}

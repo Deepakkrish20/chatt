@@ -745,7 +745,8 @@ export function subscribeToConversationMessages(
   onSyncHistory?: (messages: DirectMessage[]) => void,
   onMessageDeleted?: (messageId: string) => void,
   onReactionUpdate?: (messageId: string, reactions: MessageReaction[]) => void,
-  onMessagesRead?: (readerId: string) => void
+  onMessagesRead?: (readerId: string) => void,
+  onTypingStatus?: (isTyping: boolean) => void
 ): () => void {
   if (!isSupabaseConfigured || !conversationId) {
     return () => {};
@@ -834,6 +835,12 @@ export function subscribeToConversationMessages(
           }
         }
         onMessagesRead?.(payload.readerId);
+      }
+    })
+    // 5. Real-time Typing Status: Peer is typing / stopped typing
+    .on('broadcast', { event: 'typing_status' }, ({ payload }) => {
+      if (payload && payload.senderId !== currentUserId) {
+        onTypingStatus?.(Boolean(payload.isTyping));
       }
     })
     // 3. P2P History Sync Request: Peer asking for chat history
@@ -1052,5 +1059,37 @@ export async function markConversationAsRead(
     }
   } catch {
     // Ignore error
+  }
+}
+
+/**
+ * Send real-time typing status over the conversation room channel.
+ */
+export function sendTypingStatus(
+  conversationId: string,
+  currentUserId: string,
+  isTyping: boolean
+): void {
+  if (!isSupabaseConfigured || !conversationId || !currentUserId) {
+    return;
+  }
+
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
+  try {
+    const roomChannel = supabase.channel(`room_${canonicalId}`);
+    roomChannel.send({
+      type: 'broadcast',
+      event: 'typing_status',
+      payload: {
+        conversationId: canonicalId,
+        senderId: currentUserId,
+        isTyping,
+      },
+    });
+  } catch {
+    // Ignore broadcast errors
   }
 }
