@@ -127,7 +127,7 @@ export default function ChatListScreen() {
     setIsCreatingChat(true);
     setCreateChatError('');
 
-    const { conversationId, error } = await getOrCreateConversation(member.id);
+    const { conversationId, error } = await getOrCreateConversation(member.id, currentUserId);
 
     setIsCreatingChat(false);
 

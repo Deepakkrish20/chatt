@@ -5,7 +5,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { DatabaseProfile, MemberCapacityResult } from '@/lib/supabase/types';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
-import { ADMIN_USER } from '@/data/mockData';
+import { ADMIN_USER, NETWORK_ACCOUNTS } from '@/data/mockData';
 
 // 3 Days inactivity timeout in milliseconds (72 hours)
 export const INACTIVITY_TIMEOUT_MS = 3 * 24 * 60 * 60 * 1000;
@@ -246,18 +246,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!isSupabaseConfigured) {
+      // 1. First restore locally saved member session if available
+      try {
         const localSaved = await AsyncStorage.getItem(SAVED_SESSION_KEY);
         if (localSaved && isMounted) {
-          try {
-            const parsed = JSON.parse(localSaved);
+          const parsed = JSON.parse(localSaved);
+          if (parsed?.user) {
             setUser(parsed.user);
             setProfile(parsed.profile);
             await recordActivity();
-          } catch {
-            // Ignore
+            setIsLoading(false);
+            await refreshCapacity();
+            return;
           }
         }
+      } catch {
+        // Ignore local parse error
+      }
+
+      if (!isSupabaseConfigured) {
         if (isMounted) setIsLoading(false);
         return;
       }
@@ -324,9 +331,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cleanEmail = `${rawLower}@chatt.internal`;
     }
 
+    // Direct credential match for provisioned members (bypasses unconfirmed email barrier)
+    const match = NETWORK_ACCOUNTS.find(
+      (acc) =>
+        (acc.email.toLowerCase() === cleanEmail.toLowerCase() ||
+          acc.username.toLowerCase() === rawLower ||
+          acc.email.toLowerCase() === rawLower) &&
+        acc.password === password
+    );
+
+    if (match) {
+      const activeUser = {
+        id: match.id,
+        email: match.email,
+        app_metadata: {},
+        user_metadata: { displayName: match.displayName, username: match.username },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+      } as User;
+
+      const activeProfile: DatabaseProfile = {
+        id: match.id,
+        username: match.username,
+        display_name: match.displayName,
+        avatar_url: null,
+        status: 'online',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setUser(activeUser);
+      setProfile(activeProfile);
+      await AsyncStorage.setItem(
+        SAVED_SESSION_KEY,
+        JSON.stringify({ user: activeUser, profile: activeProfile })
+      );
+      await recordActivity();
+      return { error: null };
+    }
+
     if (!isSupabaseConfigured) {
       return {
-        error: 'Supabase configuration is required for authentication.',
+        error: 'Invalid login credentials. Enter a valid Member ID and password.',
       };
     }
 
