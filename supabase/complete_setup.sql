@@ -470,41 +470,49 @@ BEGIN
 END;
 $$;
 
--- 2. Pre-Seed Active Test Accounts
--- Seeds Deepak (Admin), Jana, Alex, and Sarah for instant 1:1 messaging tests
+-- 2. Setup Real Accounts (Krish & Jana)
 DO $$
 DECLARE
-  u_id UUID;
+  k_id UUID;
+  j_id UUID;
 BEGIN
-  -- Account 1: Deepak Krish (Admin)
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'krishdeepak748@gmail.com') THEN
-    u_id := gen_random_uuid();
+  -- Account 1: Krish (Admin)
+  SELECT id INTO k_id FROM auth.users WHERE email = 'krishdeepak748@gmail.com' LIMIT 1;
+  IF k_id IS NULL THEN
+    k_id := gen_random_uuid();
     INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-    VALUES (u_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'krishdeepak748@gmail.com', crypt('DeepakKrish@12345', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"Deepak Krish","username":"deepak"}'::jsonb, NOW(), NOW());
-    INSERT INTO public.profiles (id, username, display_name, status) VALUES (u_id, 'deepak', 'Deepak Krish (Admin)', 'online') ON CONFLICT (id) DO NOTHING;
+    VALUES (k_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'krishdeepak748@gmail.com', crypt('DeepakKrish@12345', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"krish","username":"krish"}'::jsonb, NOW(), NOW());
+  ELSE
+    UPDATE auth.users
+    SET encrypted_password = crypt('DeepakKrish@12345', gen_salt('bf')),
+        email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        raw_user_meta_data = '{"displayName":"krish","username":"krish"}'::jsonb,
+        updated_at = NOW()
+    WHERE id = k_id;
   END IF;
+
+  INSERT INTO public.profiles (id, username, display_name, status)
+  VALUES (k_id, 'krish', 'krish', 'online')
+  ON CONFLICT (id) DO UPDATE
+  SET username = 'krish', display_name = 'krish', status = 'online', updated_at = NOW();
 
   -- Account 2: Jana Thiru
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'jana@chatt.internal') THEN
-    u_id := gen_random_uuid();
+  SELECT id INTO j_id FROM auth.users WHERE email = 'janathiru0101@gmail.com' LIMIT 1;
+  IF j_id IS NULL THEN
+    j_id := gen_random_uuid();
     INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-    VALUES (u_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'jana@chatt.internal', crypt('Jana@12345', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"Jana Thiru","username":"jana"}'::jsonb, NOW(), NOW());
-    INSERT INTO public.profiles (id, username, display_name, status) VALUES (u_id, 'jana', 'Jana Thiru', 'online') ON CONFLICT (id) DO NOTHING;
+    VALUES (j_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'janathiru0101@gmail.com', crypt('janathiru@123', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"Jana Thiru","username":"janathiru"}'::jsonb, NOW(), NOW());
+  ELSE
+    UPDATE auth.users
+    SET encrypted_password = crypt('janathiru@123', gen_salt('bf')),
+        email_confirmed_at = COALESCE(email_confirmed_at, NOW()),
+        raw_user_meta_data = '{"displayName":"Jana Thiru","username":"janathiru"}'::jsonb,
+        updated_at = NOW()
+    WHERE id = j_id;
   END IF;
 
-  -- Account 3: Alex Rivera
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'alex@chatt.internal') THEN
-    u_id := gen_random_uuid();
-    INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-    VALUES (u_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'alex@chatt.internal', crypt('Alex@12345', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"Alex Rivera","username":"alex"}'::jsonb, NOW(), NOW());
-    INSERT INTO public.profiles (id, username, display_name, status) VALUES (u_id, 'alex', 'Alex Rivera', 'offline') ON CONFLICT (id) DO NOTHING;
-  END IF;
-
-  -- Account 4: Sarah Chen
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'sarah@chatt.internal') THEN
-    u_id := gen_random_uuid();
-    INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-    VALUES (u_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'sarah@chatt.internal', crypt('Sarah@12345', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}'::jsonb, '{"displayName":"Sarah Chen","username":"sarah"}'::jsonb, NOW(), NOW());
-    INSERT INTO public.profiles (id, username, display_name, status) VALUES (u_id, 'sarah', 'Sarah Chen', 'offline') ON CONFLICT (id) DO NOTHING;
-  END IF;
+  INSERT INTO public.profiles (id, username, display_name, status)
+  VALUES (j_id, 'janathiru', 'Jana Thiru', 'online')
+  ON CONFLICT (id) DO UPDATE
+  SET username = 'janathiru', display_name = 'Jana Thiru', status = 'online', updated_at = NOW();
 END $$;

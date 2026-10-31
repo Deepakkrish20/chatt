@@ -5,7 +5,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { DatabaseProfile, MemberCapacityResult } from '@/lib/supabase/types';
 import { MAX_REGISTERED_MEMBERS } from '@/types';
-import { IN_BUILT_USER, PROVISIONED_ACCOUNTS } from '@/data/mockData';
+import { ADMIN_USER } from '@/data/mockData';
 
 // 3 Days inactivity timeout in milliseconds (72 hours)
 export const INACTIVITY_TIMEOUT_MS = 3 * 24 * 60 * 60 * 1000;
@@ -56,15 +56,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [wasSessionExpired, setWasSessionExpired] = useState(false);
   const [capacity, setCapacity] = useState<MemberCapacity>({
-    activeMembers: PROVISIONED_ACCOUNTS.length,
+    activeMembers: 2,
     maxMembers: MAX_REGISTERED_MEMBERS,
-    slotsRemaining: MAX_REGISTERED_MEMBERS - PROVISIONED_ACCOUNTS.length,
+    slotsRemaining: MAX_REGISTERED_MEMBERS - 2,
     isFull: false,
   });
 
   const isAdmin = Boolean(
+    profile?.username?.toLowerCase() === 'krish' ||
     profile?.username?.toLowerCase() === 'deepak' ||
-    user?.email?.toLowerCase() === IN_BUILT_USER.email.toLowerCase()
+    user?.email?.toLowerCase() === ADMIN_USER.email.toLowerCase()
   );
 
   // Track user activity timestamp
@@ -84,9 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshCapacity = useCallback(async () => {
     if (!isSupabaseConfigured) {
       setCapacity({
-        activeMembers: PROVISIONED_ACCOUNTS.length,
+        activeMembers: 2,
         maxMembers: MAX_REGISTERED_MEMBERS,
-        slotsRemaining: Math.max(0, MAX_REGISTERED_MEMBERS - PROVISIONED_ACCOUNTS.length),
+        slotsRemaining: Math.max(0, MAX_REGISTERED_MEMBERS - 2),
         isFull: false,
       });
       return;
@@ -134,10 +135,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         setProfile(data as DatabaseProfile);
+      } else {
+        // Self-heal or create matching profile if missing
+        const { data: userData } = await supabase.auth.getUser();
+        const currentUser = userData?.user;
+        if (currentUser && currentUser.id === userId) {
+          const isKrish = currentUser.email?.toLowerCase() === ADMIN_USER.email.toLowerCase();
+          const isJana = currentUser.email?.toLowerCase() === 'janathiru0101@gmail.com';
+          const resolvedDisplay = isKrish
+            ? 'krish'
+            : isJana
+            ? 'Jana Thiru'
+            : (currentUser.user_metadata?.displayName || currentUser.email?.split('@')[0] || 'Member');
+          const resolvedUser = isKrish
+            ? 'krish'
+            : isJana
+            ? 'janathiru'
+            : (currentUser.user_metadata?.username || currentUser.email?.split('@')[0] || 'member');
+
+          const { data: createdProfile } = await supabase
+            .from('profiles')
+            .upsert({
+              id: userId,
+              username: resolvedUser,
+              display_name: resolvedDisplay,
+              status: 'online',
+              updated_at: new Date().toISOString(),
+            })
+            .select('*')
+            .single();
+
+          if (createdProfile) {
+            setProfile(createdProfile as DatabaseProfile);
+          }
+        }
       }
     } catch {
       // Ignore
@@ -276,49 +311,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     identifier: string,
     password: string
   ): Promise<{ error: string | null }> => {
-    const raw = identifier.trim().toLowerCase();
-    const cleanEmail = raw.includes('@') ? raw : `${raw}@chatt.internal`;
+    const raw = identifier.trim();
+    const rawLower = raw.toLowerCase();
 
-    // Local / Offline fallback checking PROVISIONED_ACCOUNTS
+    // Map known member IDs or usernames to registered email addresses
+    let cleanEmail = rawLower;
+    if (rawLower === 'krish' || rawLower === 'deepak') {
+      cleanEmail = 'krishdeepak748@gmail.com';
+    } else if (rawLower === 'jana' || rawLower === 'janathiru') {
+      cleanEmail = 'janathiru0101@gmail.com';
+    } else if (!rawLower.includes('@')) {
+      cleanEmail = `${rawLower}@chatt.internal`;
+    }
+
     if (!isSupabaseConfigured) {
-      const match = PROVISIONED_ACCOUNTS.find(
-        (acc) =>
-          (acc.email.toLowerCase() === cleanEmail || acc.username.toLowerCase() === raw) &&
-          acc.password === password
-      );
-
-      if (match) {
-        const localUser = {
-          id: `user_${match.username}`,
-          email: match.email,
-          app_metadata: {},
-          user_metadata: { displayName: match.displayName, username: match.username },
-          aud: 'authenticated',
-          created_at: new Date().toISOString(),
-        } as User;
-
-        const localProfile: DatabaseProfile = {
-          id: `user_${match.username}`,
-          username: match.username,
-          display_name: match.displayName,
-          avatar_url: null,
-          status: 'online',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        setUser(localUser);
-        setProfile(localProfile);
-        await AsyncStorage.setItem(
-          SAVED_SESSION_KEY,
-          JSON.stringify({ user: localUser, profile: localProfile })
-        );
-        await recordActivity();
-        return { error: null };
-      }
-
       return {
-        error: 'Invalid credentials. Enter a valid Member ID and password.',
+        error: 'Supabase configuration is required for authentication.',
       };
     }
 

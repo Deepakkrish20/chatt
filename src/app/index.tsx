@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -12,7 +12,6 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
-import { PROVISIONED_ACCOUNTS } from '@/data/mockData';
 
 export default function WelcomeSignInScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -26,9 +25,8 @@ export default function WelcomeSignInScreen() {
     isLoading: isAuthRestoring,
   } = useAuth();
 
-  // Pre-fill with primary admin credentials
-  const [identifier, setIdentifier] = useState(PROVISIONED_ACCOUNTS[0].username);
-  const [password, setPassword] = useState(PROVISIONED_ACCOUNTS[0].password);
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [identifierError, setIdentifierError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [authError, setAuthError] = useState('');
@@ -70,14 +68,6 @@ export default function WelcomeSignInScreen() {
     } else {
       router.replace('/chats');
     }
-  };
-
-  const selectAccount = (acc: typeof PROVISIONED_ACCOUNTS[0]) => {
-    setIdentifier(acc.username);
-    setPassword(acc.password);
-    setIdentifierError('');
-    setPasswordError('');
-    setAuthError('');
   };
 
   return (
@@ -190,8 +180,8 @@ export default function WelcomeSignInScreen() {
               ) : null}
 
               <AppTextInput
-                label="Member ID / Username / Email"
-                placeholder="e.g. deepak or jana"
+                label="Member ID / Email"
+                placeholder="e.g. janathiru0101@gmail.com or krish"
                 value={identifier}
                 onChangeText={(t) => {
                   setIdentifier(t);
@@ -206,7 +196,7 @@ export default function WelcomeSignInScreen() {
 
               <AppTextInput
                 label="Password"
-                placeholder="Enter password"
+                placeholder="Enter your password"
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -226,39 +216,6 @@ export default function WelcomeSignInScreen() {
                 />
               </View>
             </AppCard>
-
-            {/* Quick Test Accounts Switcher */}
-            <View style={[styles.accountsSection, { marginTop: spacing.md }]}>
-              <ThemedText variant="label" tone="muted" style={{ marginBottom: 8, textAlign: 'center' }}>
-                PROVISIONED MEMBER ACCOUNTS (CLICK TO AUTO-FILL)
-              </ThemedText>
-              <View style={styles.accountsGrid}>
-                {PROVISIONED_ACCOUNTS.map((acc) => {
-                  const isSelected = identifier.toLowerCase() === acc.username.toLowerCase();
-                  return (
-                    <Pressable
-                      key={acc.username}
-                      onPress={() => selectAccount(acc)}
-                      style={({ pressed }) => [
-                        styles.accountChip,
-                        {
-                          borderColor: isSelected ? colors.text : colors.border,
-                          backgroundColor: isSelected ? colors.surfaceSecondary : colors.surfaceElevated,
-                          opacity: pressed ? 0.7 : 1,
-                        },
-                      ]}
-                    >
-                      <ThemedText variant="caption" tone={isSelected ? 'primary' : 'secondary'} style={{ fontWeight: isSelected ? '600' : '400' }}>
-                        @{acc.username}
-                      </ThemedText>
-                      <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
-                        {acc.role}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
 
             {/* Privacy & Member Constraint Banner */}
             <View
@@ -353,22 +310,6 @@ const styles = StyleSheet.create({
   },
   bannerBox: {
     borderWidth: 1,
-  },
-  accountsSection: {
-    width: '100%',
-  },
-  accountsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  accountChip: {
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignItems: 'center',
   },
   constraintBanner: {
     borderWidth: 1,

@@ -13,7 +13,7 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
-import { IN_BUILT_USER } from '@/data/mockData';
+import { ADMIN_USER } from '@/data/mockData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -32,9 +32,9 @@ export default function SettingsScreen() {
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [provisionMsg, setProvisionMsg] = useState<{ text: string; error: boolean } | null>(null);
 
-  const displayName = profile?.display_name || user?.user_metadata?.displayName || IN_BUILT_USER.displayName;
-  const username = profile?.username || user?.user_metadata?.username || IN_BUILT_USER.username;
-  const email = user?.email || IN_BUILT_USER.email;
+  const displayName = profile?.display_name || user?.user_metadata?.displayName || ADMIN_USER.displayName;
+  const username = profile?.username || user?.user_metadata?.username || ADMIN_USER.username;
+  const email = user?.email || ADMIN_USER.email;
 
   const handleCreateMember = async () => {
     setProvisionMsg(null);

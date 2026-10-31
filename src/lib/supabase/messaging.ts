@@ -16,7 +16,6 @@ import {
   ConversationParticipantProfile,
 } from './types';
 import { DirectConversationPreview, DirectMessage } from '@/types';
-import { PROVISIONED_ACCOUNTS } from '@/data/mockData';
 import { formatConversationTime, formatMessageTime } from '@/utils';
 
 /**
@@ -115,15 +114,7 @@ export async function fetchRegisteredMembers(
   currentUserId: string
 ): Promise<ConversationParticipantProfile[]> {
   if (!isSupabaseConfigured || !currentUserId) {
-    return PROVISIONED_ACCOUNTS.filter(
-      (a) => a.username.toLowerCase() !== currentUserId.replace('user_', '').toLowerCase()
-    ).map((a) => ({
-      id: `user_${a.username}`,
-      username: a.username,
-      displayName: a.displayName,
-      avatarUrl: null,
-      isOnline: true,
-    }));
+    return [];
   }
 
   try {
@@ -159,8 +150,8 @@ export async function getOrCreateConversation(
 ): Promise<{ conversationId: string | null; error: string | null }> {
   if (!isSupabaseConfigured) {
     return {
-      conversationId: `conv_${targetUserId}`,
-      error: null,
+      conversationId: null,
+      error: 'Backend is not configured.',
     };
   }
 
@@ -244,17 +235,8 @@ export async function sendDirectMessage(
 
   if (!isSupabaseConfigured || !currentUserId) {
     return {
-      data: {
-        id: `m_${Date.now()}`,
-        conversationId,
-        senderId: currentUserId || 'user_local',
-        senderName: 'You',
-        content: trimmed,
-        createdAt: formatMessageTime(new Date().toISOString()),
-        isOutgoing: true,
-        status: 'delivered',
-      },
-      error: null,
+      data: null,
+      error: 'Messaging requires active Supabase connection and authenticated user.',
     };
   }
 

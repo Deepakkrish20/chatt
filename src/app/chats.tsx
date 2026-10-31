@@ -50,19 +50,27 @@ export default function ChatListScreen() {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [createChatError, setCreateChatError] = useState('');
 
-  // Load conversations
+  // Load conversations and registered members
   const loadConversations = useCallback(async () => {
-    const list = await fetchConversations(currentUserId);
+    const [list, memberList] = await Promise.all([
+      fetchConversations(currentUserId),
+      fetchRegisteredMembers(currentUserId),
+    ]);
     setConversations(list);
+    setMembers(memberList);
     setIsLoading(false);
   }, [currentUserId]);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchConversations(currentUserId).then((list) => {
+    Promise.all([
+      fetchConversations(currentUserId),
+      fetchRegisteredMembers(currentUserId),
+    ]).then(([list, memberList]) => {
       if (isMounted) {
         setConversations(list);
+        setMembers(memberList);
         setIsLoading(false);
       }
     });
@@ -311,7 +319,7 @@ export default function ChatListScreen() {
                     ? `No peer conversations matching "${searchQuery}".`
                     : 'Start a private 1:1 conversation with any of the registered members.'}
                 </ThemedText>
-                <View style={{ marginTop: spacing.md }}>
+                <View style={{ marginTop: spacing.md, width: '100%', alignItems: 'center' }}>
                   {Boolean(searchQuery) ? (
                     <AppButton
                       title="Clear Search"
@@ -320,12 +328,61 @@ export default function ChatListScreen() {
                       onPress={() => setSearchQuery('')}
                     />
                   ) : (
-                    <AppButton
-                      title="Start Conversation"
-                      variant="primary"
-                      size="sm"
-                      onPress={handleOpenNewChatModal}
-                    />
+                    <View style={{ width: '100%', gap: spacing.md }}>
+                      {members.length > 0 ? (
+                        <View style={{ width: '100%', gap: spacing.sm, marginTop: spacing.xs }}>
+                          <ThemedText
+                            variant="label"
+                            tone="muted"
+                            style={{ textAlign: 'center', marginBottom: 2 }}
+                          >
+                            REGISTERED MEMBERS (TAP TO MESSAGE)
+                          </ThemedText>
+                          {members.map((m) => (
+                            <Pressable
+                              key={m.id}
+                              onPress={() => handleSelectMember(m)}
+                              style={({ pressed }) => [
+                                styles.emptyMemberCard,
+                                {
+                                  borderColor: colors.border,
+                                  backgroundColor: colors.surfaceElevated,
+                                  borderRadius: radius.md,
+                                  padding: spacing.md,
+                                  opacity: pressed ? 0.7 : 1,
+                                },
+                              ]}
+                            >
+                              <View style={styles.emptyMemberRow}>
+                                <AppAvatar name={m.displayName} size="md" isOnline={m.isOnline} />
+                                <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                  <ThemedText variant="bodyMedium" tone="primary">
+                                    {m.displayName}
+                                  </ThemedText>
+                                  <ThemedText variant="caption" tone="secondary">
+                                    @{m.username}
+                                  </ThemedText>
+                                </View>
+                                <AppButton
+                                  title="Chat"
+                                  variant="primary"
+                                  size="sm"
+                                  onPress={() => handleSelectMember(m)}
+                                  loading={isCreatingChat}
+                                />
+                              </View>
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : (
+                        <AppButton
+                          title="Start Conversation"
+                          variant="primary"
+                          size="sm"
+                          onPress={handleOpenNewChatModal}
+                        />
+                      )}
+                    </View>
                   )}
                 </View>
               </View>
@@ -607,5 +664,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 2,
+  },
+  emptyMemberCard: {
+    borderWidth: 1,
+    width: '100%',
+  },
+  emptyMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
   },
 });
