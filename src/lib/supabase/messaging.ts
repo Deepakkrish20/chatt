@@ -744,7 +744,8 @@ export function subscribeToConversationMessages(
   onNewMessage: (msg: DirectMessage) => void,
   onSyncHistory?: (messages: DirectMessage[]) => void,
   onMessageDeleted?: (messageId: string) => void,
-  onReactionUpdate?: (messageId: string, reactions: MessageReaction[]) => void
+  onReactionUpdate?: (messageId: string, reactions: MessageReaction[]) => void,
+  onMessagesRead?: (readerId: string) => void
 ): () => void {
   if (!isSupabaseConfigured || !conversationId) {
     return () => {};
@@ -811,6 +812,28 @@ export function subscribeToConversationMessages(
           }
         }
         onReactionUpdate?.(payload.messageId, payload.reactions);
+      }
+    })
+    // 4. Real-time Read Receipt: Peer opened the chat room!
+    .on('broadcast', { event: 'messages_read' }, async ({ payload }) => {
+      if (payload && payload.readerId && payload.readerId !== currentUserId) {
+        const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const list: DirectMessage[] = JSON.parse(raw);
+          let hasChanges = false;
+          const updated = list.map((m) => {
+            if (m.senderId === currentUserId && m.status !== 'read') {
+              hasChanges = true;
+              return { ...m, status: 'read' as const };
+            }
+            return m;
+          });
+          if (hasChanges) {
+            await AsyncStorage.setItem(key, JSON.stringify(updated));
+          }
+        }
+        onMessagesRead?.(payload.readerId);
       }
     })
     // 3. P2P History Sync Request: Peer asking for chat history
@@ -920,6 +943,9 @@ export function subscribeToConversationsList(
     .on('broadcast', { event: 'delete_message' }, () => {
       onUpdate();
     })
+    .on('broadcast', { event: 'messages_read' }, () => {
+      onUpdate();
+    })
     .on(
       'postgres_changes',
       {
@@ -940,17 +966,91 @@ export function subscribeToConversationsList(
 
 /**
  * Mark all incoming messages in a conversation as read.
+ * 1. Updates all messages from peer in local storage to status: 'read'
+ * 2. Broadcasts 'messages_read' event so sender's tick turns from single tick into double tick in real time!
+ * 3. Resets unread counter in conversations index
  */
-export async function markConversationAsRead(conversationId: string): Promise<void> {
-  if (!isSupabaseConfigured || !conversationId) {
+export async function markConversationAsRead(
+  conversationId: string,
+  currentUserId?: string
+): Promise<void> {
+  if (!conversationId) {
     return;
   }
 
+  const canonicalId =
+    currentUserId && !conversationId.startsWith('conv_')
+      ? getCanonicalConversationId(conversationId, currentUserId)
+      : conversationId;
+
   try {
-    await supabase.rpc('mark_conversation_read', {
-      target_conversation_id: conversationId,
-    });
+    const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+    const raw = await AsyncStorage.getItem(key);
+    if (raw) {
+      const list: DirectMessage[] = JSON.parse(raw);
+      let hasChanges = false;
+      const updatedList = list.map((m) => {
+        // If current user is known, mark messages sent by the peer as read
+        if (currentUserId && m.senderId !== currentUserId && m.status !== 'read') {
+          hasChanges = true;
+          return { ...m, status: 'read' as const };
+        }
+        return m;
+      });
+
+      if (hasChanges) {
+        await AsyncStorage.setItem(key, JSON.stringify(updatedList));
+      }
+    }
+
+    // Reset unread count in conversations index
+    const rawConvs = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    if (rawConvs) {
+      const convList: DirectConversationPreview[] = JSON.parse(rawConvs);
+      const targetIdx = convList.findIndex((c) => c.id === canonicalId);
+      if (targetIdx !== -1 && convList[targetIdx].unreadCount > 0) {
+        convList[targetIdx] = { ...convList[targetIdx], unreadCount: 0 };
+        await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify(convList));
+      }
+    }
+
+    // Broadcast messages_read event over Supabase Realtime so sender sees double tick!
+    if (isSupabaseConfigured && currentUserId) {
+      try {
+        const roomChannel = supabase.channel(`room_${canonicalId}`);
+        roomChannel.send({
+          type: 'broadcast',
+          event: 'messages_read',
+          payload: {
+            conversationId: canonicalId,
+            readerId: currentUserId,
+            readAt: Date.now(),
+          },
+        });
+
+        const globalChannel = supabase.channel('conversations_global');
+        globalChannel.send({
+          type: 'broadcast',
+          event: 'messages_read',
+          payload: {
+            conversationId: canonicalId,
+            readerId: currentUserId,
+            readAt: Date.now(),
+          },
+        });
+      } catch {
+        // Ignore broadcast failure
+      }
+
+      try {
+        await supabase.rpc('mark_conversation_read', {
+          target_conversation_id: canonicalId,
+        });
+      } catch {
+        // Ignore
+      }
+    }
   } catch {
-    // Silently ignore
+    // Ignore error
   }
 }

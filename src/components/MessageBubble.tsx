@@ -160,8 +160,8 @@ export function MessageBubble({
             {isOutgoing && !isDeleted ? (
               <AppIcon
                 name={message.status === 'read' ? 'check-all' : 'check'}
-                size={12}
-                color="#525252"
+                size={13}
+                color={message.status === 'read' ? '#38BDF8' : '#737373'}
               />
             ) : null}
 

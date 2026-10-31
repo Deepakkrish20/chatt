@@ -74,7 +74,7 @@ export default function PrivateChatScreen() {
       if (isMounted) {
         setMessages(history);
         setIsLoading(false);
-        markConversationAsRead(conversationId);
+        markConversationAsRead(conversationId, currentUserId);
       }
     });
 
@@ -91,7 +91,7 @@ export default function PrivateChatScreen() {
           }
           return [...prev, newMsg];
         });
-        markConversationAsRead(conversationId);
+        markConversationAsRead(conversationId, currentUserId);
       },
       (syncedHistory) => {
         if (!isMounted) return;
@@ -114,6 +114,17 @@ export default function PrivateChatScreen() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === updatedMessageId ? { ...m, reactions } : m
+          )
+        );
+      },
+      (readerId) => {
+        if (!isMounted) return;
+        // Peer opened the chat! Instant real-time upgrade from single tick to double tick
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.isOutgoing || m.senderId === currentUserId
+              ? { ...m, status: 'read' }
+              : m
           )
         );
       }
