@@ -31,8 +31,11 @@ import {
   deleteMessageForMe,
   isMessageWithinOneHour,
   getRemainingDeleteTime,
+  toggleMessageReaction,
 } from '@/lib/supabase';
 import { DirectMessage } from '@/types';
+
+const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
 export default function PrivateChatScreen() {
   const { colors, spacing, radius } = useAppTheme();
@@ -59,6 +62,8 @@ export default function PrivateChatScreen() {
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reactionTargetMessage, setReactionTargetMessage] = useState<DirectMessage | null>(null);
+  const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
   const isPeerTyping = false;
   const flatListRef = useRef<FlatList<DirectMessage>>(null);
 
@@ -73,7 +78,7 @@ export default function PrivateChatScreen() {
       }
     });
 
-    // Subscribe to live incoming messages & auto-sync history & real-time message deletions
+    // Subscribe to live incoming messages, auto-sync history, real-time message deletions & reactions
     const unsubscribe = subscribeToConversationMessages(
       conversationId,
       currentUserId,
@@ -102,6 +107,15 @@ export default function PrivateChatScreen() {
               : m
           )
         );
+      },
+      (updatedMessageId, reactions) => {
+        if (!isMounted) return;
+        // Real-time update when peer or current user adds/toggles an emoji reaction
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === updatedMessageId ? { ...m, reactions } : m
+          )
+        );
       }
     );
 
@@ -116,6 +130,42 @@ export default function PrivateChatScreen() {
     setSelectedMessage(msg);
     setDeleteError(null);
     setIsActionModalOpen(true);
+  };
+
+  const handleDoubleTapMessage = (msg: DirectMessage) => {
+    if (msg.id.startsWith('temp_') || msg.isDeletedForEveryone) return;
+    setReactionTargetMessage(msg);
+    setIsReactionModalOpen(true);
+  };
+
+  const handleSelectReaction = async (emoji: string) => {
+    if (!reactionTargetMessage) return;
+    const targetMsgId = reactionTargetMessage.id;
+    setIsReactionModalOpen(false);
+    setReactionTargetMessage(null);
+
+    // Optimistic local update
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== targetMsgId) return m;
+        const existing = m.reactions || [];
+        const userIdx = existing.findIndex((r) => r.userId === currentUserId);
+        let updated;
+        if (userIdx >= 0 && existing[userIdx].emoji === emoji) {
+          updated = existing.filter((_, idx) => idx !== userIdx);
+        } else if (userIdx >= 0) {
+          updated = [...existing];
+          updated[userIdx] = { emoji, userId: currentUserId };
+        } else {
+          updated = [...existing, { emoji, userId: currentUserId }];
+        }
+        return { ...m, reactions: updated };
+      })
+    );
+
+    // Persist & broadcast
+    await toggleMessageReaction(conversationId, targetMsgId, emoji, currentUserId);
+    recordActivity();
   };
 
   const handleDeleteForEveryone = async () => {
@@ -335,6 +385,7 @@ export default function PrivateChatScreen() {
                   message={item}
                   animate={item.id.startsWith('temp_') || item.id.startsWith('m_reply_')}
                   onLongPress={() => handleOpenMessageOptions(item)}
+                  onDoubleTap={() => handleDoubleTapMessage(item)}
                 />
               )}
               contentContainerStyle={[
@@ -510,6 +561,46 @@ export default function PrivateChatScreen() {
 
             {/* Action Buttons */}
             <View style={{ marginTop: spacing.md }}>
+              {/* Option 0: React to message (Quick reaction) */}
+              {!isAlreadyDeletedForEveryone ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionOptionBtn,
+                    {
+                      backgroundColor: colors.surfaceSecondary,
+                      borderColor: colors.border,
+                      borderRadius: radius.md,
+                      padding: spacing.md,
+                      marginBottom: spacing.sm,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={() => {
+                    const target = selectedMessage;
+                    setIsActionModalOpen(false);
+                    setSelectedMessage(null);
+                    if (target) {
+                      setReactionTargetMessage(target);
+                      setIsReactionModalOpen(true);
+                    }
+                  }}
+                >
+                  <View style={styles.actionOptionHeader}>
+                    <ThemedText variant="bodyMedium" style={{ fontWeight: '600' }}>
+                      React to message
+                    </ThemedText>
+                    <ThemedText style={{ fontSize: 16 }}>❤️ 👍 😂</ThemedText>
+                  </View>
+                  <ThemedText
+                    variant="caption"
+                    tone="secondary"
+                    style={{ marginTop: 3, fontSize: 11 }}
+                  >
+                    Quickly add or toggle an emoji reaction (also on double-tap)
+                  </ThemedText>
+                </Pressable>
+              ) : null}
+
               {/* Option 1: Delete for everyone (Sender only, strictly within 1 hour) */}
               {isSelectedMsgOutgoing && !isAlreadyDeletedForEveryone ? (
                 canDeleteForEveryone ? (
@@ -682,6 +773,104 @@ export default function PrivateChatScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* WhatsApp-Style Floating Reaction Picker Pop-up */}
+      <Modal
+        visible={isReactionModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setIsReactionModalOpen(false);
+          setReactionTargetMessage(null);
+        }}
+      >
+        <Pressable
+          style={styles.reactionBackdrop}
+          onPress={() => {
+            setIsReactionModalOpen(false);
+            setReactionTargetMessage(null);
+          }}
+        >
+          <Pressable
+            style={[
+              styles.reactionPopupCard,
+              {
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+                borderRadius: radius.xl,
+                padding: spacing.md,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.reactionPopupHeader}>
+              <ThemedText
+                variant="label"
+                tone="muted"
+                style={{ textTransform: 'uppercase', letterSpacing: 1 }}
+              >
+                React to Message
+              </ThemedText>
+            </View>
+
+            {/* Horizontal Emoji Bar */}
+            <View style={styles.emojiRow}>
+              {QUICK_REACTION_EMOJIS.map((emoji) => {
+                const isSelectedByMe = reactionTargetMessage?.reactions?.some(
+                  (r) => r.userId === currentUserId && r.emoji === emoji
+                );
+
+                return (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => handleSelectReaction(emoji)}
+                    style={({ pressed }) => [
+                      styles.emojiButton,
+                      {
+                        backgroundColor: isSelectedByMe
+                          ? colors.surfaceSecondary
+                          : 'transparent',
+                        borderColor: isSelectedByMe ? colors.border : 'transparent',
+                        transform: [{ scale: pressed ? 1.25 : 1 }],
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`React with ${emoji}`}
+                  >
+                    <ThemedText style={styles.popupEmojiText}>{emoji}</ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Message Excerpt Preview */}
+            {reactionTargetMessage ? (
+              <View
+                style={[
+                  styles.reactionMessagePreview,
+                  {
+                    backgroundColor: colors.surfaceSecondary,
+                    borderColor: colors.border,
+                    borderRadius: radius.md,
+                    paddingHorizontal: spacing.sm + 2,
+                    paddingVertical: spacing.xs + 2,
+                    marginTop: spacing.sm,
+                  },
+                ]}
+              >
+                <ThemedText
+                  variant="caption"
+                  tone="muted"
+                  numberOfLines={1}
+                  style={{ fontStyle: 'italic' }}
+                >
+                  {`"${reactionTargetMessage.content}"`}
+                </ThemedText>
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -794,5 +983,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
+  },
+  reactionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  reactionPopupCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  reactionPopupHeader: {
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  emojiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  emojiButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popupEmojiText: {
+    fontSize: 24,
+  },
+  reactionMessagePreview: {
+    width: '100%',
+    borderWidth: 1,
+    alignItems: 'center',
   },
 });

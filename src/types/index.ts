@@ -18,6 +18,11 @@ export interface UserSummary {
   createdAt: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  userId: string;
+}
+
 export interface DirectMessage {
   id: string;
   conversationId: string;
@@ -30,6 +35,7 @@ export interface DirectMessage {
   status: 'sent' | 'delivered' | 'read';
   isDeletedForEveryone?: boolean;
   deletedForUsers?: string[];
+  reactions?: MessageReaction[];
 }
 
 export interface DirectConversationPreview {

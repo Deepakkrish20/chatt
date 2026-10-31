@@ -16,7 +16,7 @@ import {
   DatabaseMessage,
   ConversationParticipantProfile,
 } from './types';
-import { DirectConversationPreview, DirectMessage } from '@/types';
+import { DirectConversationPreview, DirectMessage, MessageReaction } from '@/types';
 import { formatConversationTime, formatMessageTime } from '@/utils';
 import { NETWORK_ACCOUNTS } from '@/data/mockData';
 
@@ -582,6 +582,85 @@ export async function deleteMessageForMe(
 }
 
 /**
+ * Add or toggle an emoji reaction on a message.
+ * Updates local persistent storage and broadcasts the reaction update event in real time.
+ */
+export async function toggleMessageReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string,
+  currentUserId: string
+): Promise<{ success: boolean; reactions?: MessageReaction[]; error: string | null }> {
+  const canonicalId = conversationId.startsWith('conv_')
+    ? conversationId
+    : getCanonicalConversationId(conversationId, currentUserId);
+
+  try {
+    const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+    const raw = await AsyncStorage.getItem(key);
+    const list: DirectMessage[] = raw ? JSON.parse(raw) : [];
+
+    const targetIndex = list.findIndex((m) => m.id === messageId);
+    if (targetIndex === -1) {
+      return { success: false, error: 'Message not found.' };
+    }
+
+    const target = list[targetIndex];
+    if (target.isDeletedForEveryone) {
+      return { success: false, error: 'Cannot react to a deleted message.' };
+    }
+
+    const existingReactions = target.reactions || [];
+    const userReactionIdx = existingReactions.findIndex((r) => r.userId === currentUserId);
+
+    let updatedReactions: MessageReaction[];
+    if (userReactionIdx >= 0 && existingReactions[userReactionIdx].emoji === emoji) {
+      // User tapped the same emoji -> remove reaction (toggle off)
+      updatedReactions = existingReactions.filter((_, idx) => idx !== userReactionIdx);
+    } else if (userReactionIdx >= 0) {
+      // User tapped a different emoji -> switch reaction
+      updatedReactions = [...existingReactions];
+      updatedReactions[userReactionIdx] = { emoji, userId: currentUserId };
+    } else {
+      // User reacted for the first time
+      updatedReactions = [...existingReactions, { emoji, userId: currentUserId }];
+    }
+
+    list[targetIndex] = {
+      ...target,
+      reactions: updatedReactions,
+    };
+
+    await AsyncStorage.setItem(key, JSON.stringify(list));
+
+    // Broadcast reaction update over Supabase Realtime
+    if (isSupabaseConfigured) {
+      try {
+        const roomChannel = supabase.channel(`room_${canonicalId}`);
+        roomChannel.send({
+          type: 'broadcast',
+          event: 'reaction_update',
+          payload: {
+            conversationId: canonicalId,
+            messageId,
+            reactions: updatedReactions,
+          },
+        });
+      } catch {
+        // Ignore broadcast failure
+      }
+    }
+
+    return { success: true, reactions: updatedReactions, error: null };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to update reaction.',
+    };
+  }
+}
+
+/**
  * Send a direct text message inside a conversation.
  * Saves locally immediately, broadcasts over WebSockets to room & global channel,
  * and pushes to cloud database.
@@ -664,7 +743,8 @@ export function subscribeToConversationMessages(
   participantName: string,
   onNewMessage: (msg: DirectMessage) => void,
   onSyncHistory?: (messages: DirectMessage[]) => void,
-  onMessageDeleted?: (messageId: string) => void
+  onMessageDeleted?: (messageId: string) => void,
+  onReactionUpdate?: (messageId: string, reactions: MessageReaction[]) => void
 ): () => void {
   if (!isSupabaseConfigured || !conversationId) {
     return () => {};
@@ -712,6 +792,25 @@ export function subscribeToConversationMessages(
           }
         }
         onMessageDeleted?.(payload.messageId);
+      }
+    })
+    // 3. Real-time Emoji Reaction Update
+    .on('broadcast', { event: 'reaction_update' }, async ({ payload }) => {
+      if (payload && payload.messageId && Array.isArray(payload.reactions)) {
+        const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const list: DirectMessage[] = JSON.parse(raw);
+          const idx = list.findIndex((m) => m.id === payload.messageId);
+          if (idx !== -1) {
+            list[idx] = {
+              ...list[idx],
+              reactions: payload.reactions,
+            };
+            await AsyncStorage.setItem(key, JSON.stringify(list));
+          }
+        }
+        onReactionUpdate?.(payload.messageId, payload.reactions);
       }
     })
     // 3. P2P History Sync Request: Peer asking for chat history

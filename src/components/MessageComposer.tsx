@@ -45,6 +45,15 @@ export function MessageComposer({
     }).start();
   };
 
+  const handleKeyPress = (e: any) => {
+    if (Platform.OS === 'web') {
+      if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+        e.preventDefault?.();
+        handleSend();
+      }
+    }
+  };
+
   const canSend = Boolean(text.trim()) && !disabled;
 
   return (
@@ -77,6 +86,7 @@ export function MessageComposer({
           placeholderTextColor={colors.textMuted}
           editable={!disabled}
           multiline
+          onKeyPress={handleKeyPress}
           style={[
             typography.body,
             styles.input,
