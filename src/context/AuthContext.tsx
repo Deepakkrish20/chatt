@@ -246,7 +246,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 1. First restore locally saved member session if available
+      // 1. Prioritize restoring cloud Supabase session if configured
+      if (isSupabaseConfigured) {
+        try {
+          const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+          if (!error && initialSession && isMounted) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+            await fetchProfile(initialSession.user.id);
+            await recordActivity();
+            setIsLoading(false);
+            await refreshCapacity();
+            return;
+          }
+        } catch {
+          // Session restoration failure handled safely
+        }
+      }
+
+      // 2. Restore locally saved session as fallback
       try {
         const localSaved = await AsyncStorage.getItem(SAVED_SESSION_KEY);
         if (localSaved && isMounted) {
@@ -264,27 +282,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Ignore local parse error
       }
 
-      if (!isSupabaseConfigured) {
-        if (isMounted) setIsLoading(false);
-        return;
+      if (isMounted) {
+        setIsLoading(false);
       }
-
-      try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        if (!error && initialSession && isMounted) {
-          setSession(initialSession);
-          setUser(initialSession.user);
-          await fetchProfile(initialSession.user.id);
-          await recordActivity();
-        }
-      } catch {
-        // Session restoration failure handled safely
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-
       await refreshCapacity();
     }
 
@@ -331,7 +331,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cleanEmail = `${rawLower}@chatt.internal`;
     }
 
-    // Direct credential match for provisioned members (bypasses unconfirmed email barrier)
+    // 1. Try real Supabase Auth first when configured
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+
+        if (!error && data.session && data.user) {
+          setSession(data.session);
+          setUser(data.user);
+          await fetchProfile(data.user.id);
+          await AsyncStorage.setItem(
+            SAVED_SESSION_KEY,
+            JSON.stringify({ user: data.user, profile: null })
+          );
+          await recordActivity();
+          await refreshCapacity();
+          return { error: null };
+        }
+
+        // Return real authentication errors (e.g., wrong password, user does not exist)
+        if (error && !error.message.toLowerCase().includes('fetch') && !error.message.toLowerCase().includes('network')) {
+          return { error: error.message };
+        }
+      } catch {
+        // Fall through to offline fallback if network is unreachable
+      }
+    }
+
+    // 2. Offline credential fallback
     const match = NETWORK_ACCOUNTS.find(
       (acc) =>
         (acc.email.toLowerCase() === cleanEmail.toLowerCase() ||
@@ -370,40 +400,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: null };
     }
 
-    if (!isSupabaseConfigured) {
-      return {
-        error: 'Invalid login credentials. Enter a valid Member ID and password.',
-      };
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-
-      if (error) {
-        return { error: error.message };
-      }
-
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.user);
-        if (data.user) {
-          await fetchProfile(data.user.id);
-          await recordActivity();
-        }
-      }
-
-      return { error: null };
-    } catch (err: unknown) {
-      return {
-        error:
-          err instanceof Error
-            ? err.message
-            : 'An unexpected authentication error occurred.',
-      };
-    }
+    return {
+      error: 'Invalid login credentials. Enter a valid Member ID and password.',
+    };
   };
 
   // 2. Admin Create Member directly via RPC (No emails or SMTP needed)

@@ -34,6 +34,8 @@ import {
   getRemainingDeleteTime,
   toggleMessageReaction,
   sendTypingStatus,
+  supabase,
+  isSupabaseConfigured,
 } from '@/lib/supabase';
 import { DirectMessage } from '@/types';
 
@@ -41,7 +43,7 @@ const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏',
 
 export default function PrivateChatScreen() {
   const { colors, spacing, radius, typography } = useAppTheme();
-  const { user, recordActivity } = useAuth();
+  const { user, profile, recordActivity } = useAuth();
   const params = useLocalSearchParams<{
     id: string;
     name?: string;
@@ -53,9 +55,56 @@ export default function PrivateChatScreen() {
   const conversationId = params.id || 'conv_1';
   const currentUserId = user?.id || '';
 
-  // Resolve metadata
-  const participantName = params.name || 'Peer Member';
-  const isOnline = params.online === 'true';
+  // Peer resolution: Ensure user NEVER sees their own profile as the peer
+  const myNames = [
+    profile?.display_name?.toLowerCase(),
+    profile?.username?.toLowerCase(),
+    user?.user_metadata?.displayName?.toLowerCase(),
+    user?.user_metadata?.username?.toLowerCase(),
+    user?.email?.split('@')[0]?.toLowerCase(),
+  ].filter(Boolean) as string[];
+
+  const isParamMyOwnName = Boolean(params.name && myNames.includes(params.name.trim().toLowerCase()));
+
+  const defaultPeerName = (profile?.username || user?.email || '').toLowerCase().includes('jana')
+    ? 'krish'
+    : 'Jana Thiru';
+
+  const [participantName, setParticipantName] = useState(
+    isParamMyOwnName || !params.name ? defaultPeerName : params.name
+  );
+  const [isOnline, setIsOnline] = useState(params.online === 'true');
+
+  // Load actual peer profile if conversation is on Supabase
+  useEffect(() => {
+    if (!isSupabaseConfigured || !conversationId || conversationId.startsWith('conv_') || !currentUserId) {
+      return;
+    }
+    let isMounted = true;
+    supabase
+      .from('conversations')
+      .select('user1_id, user2_id')
+      .eq('id', conversationId)
+      .maybeSingle()
+      .then(async ({ data: conv }) => {
+        if (!isMounted || !conv) return;
+        const otherId = conv.user1_id === currentUserId ? conv.user2_id : conv.user1_id;
+        if (!otherId) return;
+        const { data: peerProf } = await supabase
+          .from('profiles')
+          .select('display_name, username, status')
+          .eq('id', otherId)
+          .maybeSingle();
+        if (isMounted && peerProf?.display_name) {
+          setParticipantName(peerProf.display_name);
+          setIsOnline(peerProf.status === 'online');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [conversationId, currentUserId]);
 
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);

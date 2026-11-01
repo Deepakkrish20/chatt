@@ -34,12 +34,19 @@ export function getCanonicalConversationId(userId1: string, userId2: string): st
   return `conv_${sorted[0]}_${sorted[1]}`;
 }
 
+export function getConversationsStorageKey(userId?: string): string {
+  const clean = (userId || '').trim();
+  return clean ? `${STORAGE_CONVERSATIONS_KEY}_${clean}` : STORAGE_CONVERSATIONS_KEY;
+}
+
 /**
  * Save a single message into local persistent storage and update conversation preview.
  */
 export async function saveMessageToLocalHistory(
   conversationId: string,
-  message: DirectMessage
+  message: DirectMessage,
+  currentUserId?: string,
+  peerName?: string
 ): Promise<DirectMessage[]> {
   try {
     const key = STORAGE_MESSAGES_KEY_PREFIX + conversationId;
@@ -57,7 +64,7 @@ export async function saveMessageToLocalHistory(
     existingList.sort((a, b) => a.id.localeCompare(b.id));
 
     await AsyncStorage.setItem(key, JSON.stringify(existingList));
-    await updateConversationSummaryLocally(conversationId, message);
+    await updateConversationSummaryLocally(conversationId, message, currentUserId, peerName);
 
     return existingList;
   } catch {
@@ -70,7 +77,9 @@ export async function saveMessageToLocalHistory(
  */
 export async function mergeMessagesToLocalHistory(
   conversationId: string,
-  newMessages: DirectMessage[]
+  newMessages: DirectMessage[],
+  currentUserId?: string,
+  peerName?: string
 ): Promise<DirectMessage[]> {
   if (!newMessages || newMessages.length === 0) return [];
   try {
@@ -93,7 +102,7 @@ export async function mergeMessagesToLocalHistory(
     await AsyncStorage.setItem(key, JSON.stringify(merged));
 
     if (merged.length > 0) {
-      await updateConversationSummaryLocally(conversationId, merged[merged.length - 1]);
+      await updateConversationSummaryLocally(conversationId, merged[merged.length - 1], currentUserId, peerName);
     }
 
     return merged;
@@ -103,20 +112,18 @@ export async function mergeMessagesToLocalHistory(
 }
 
 /**
- * Update the conversation preview summary in the global index.
+ * Update the conversation preview summary in the user-scoped conversation index.
  */
 async function updateConversationSummaryLocally(
   conversationId: string,
-  lastMessage: DirectMessage
+  lastMessage: DirectMessage,
+  currentUserId?: string,
+  peerName?: string
 ): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    const storageKey = getConversationsStorageKey(currentUserId);
+    const raw = await AsyncStorage.getItem(storageKey);
     const list: DirectConversationPreview[] = raw ? JSON.parse(raw) : [];
-
-    const isJana = lastMessage.senderId === 'user_jana' || lastMessage.senderId.includes('jana');
-    const peer = isJana
-      ? { id: 'user_krish', name: 'krish', username: 'krish' }
-      : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
 
     const existingIndex = list.findIndex((c) => c.id === conversationId);
     if (existingIndex >= 0) {
@@ -126,11 +133,20 @@ async function updateConversationSummaryLocally(
         lastMessageTimestamp: lastMessage.createdAt,
       };
     } else {
+      const isSenderMe = currentUserId ? lastMessage.senderId === currentUserId : lastMessage.isOutgoing;
+      const isJana = (currentUserId || '').toLowerCase().includes('jana');
+      const fallbackPeer = isJana
+        ? { id: 'user_krish', name: 'krish', username: 'krish' }
+        : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
+
+      const resolvedName = peerName || (isSenderMe ? fallbackPeer.name : lastMessage.senderName) || fallbackPeer.name;
+      const resolvedId = isSenderMe ? fallbackPeer.id : lastMessage.senderId;
+
       list.push({
         id: conversationId,
-        participantId: peer.id,
-        participantName: peer.name,
-        participantUsername: peer.username,
+        participantId: resolvedId,
+        participantName: resolvedName,
+        participantUsername: resolvedName.toLowerCase().replace(/\s+/g, ''),
         isOnline: true,
         lastMessageSnippet: lastMessage.content,
         lastMessageTimestamp: lastMessage.createdAt,
@@ -138,7 +154,7 @@ async function updateConversationSummaryLocally(
       });
     }
 
-    await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify(list));
+    await AsyncStorage.setItem(storageKey, JSON.stringify(list));
   } catch {
     // Ignore
   }
@@ -157,11 +173,35 @@ export async function fetchConversations(
   // 1. Try Supabase cloud database if available
   if (isSupabaseConfigured) {
     try {
-      const { data: convData, error: convError } = await supabase
+      let { data: convData, error: convError } = await supabase
         .from('conversations')
         .select('*')
         .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
+
+      // If no conversation found in DB yet, auto-provision 1:1 conversation with the other registered member
+      if (!convError && (!convData || convData.length === 0)) {
+        const { data: otherProfiles } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url, status')
+          .neq('id', currentUserId)
+          .limit(1);
+
+        if (otherProfiles && otherProfiles.length > 0) {
+          const target = otherProfiles[0];
+          const { conversationId } = await getOrCreateConversation(target.id, currentUserId);
+          if (conversationId) {
+            const { data: reloadedConvs } = await supabase
+              .from('conversations')
+              .select('*')
+              .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
+              .order('last_message_at', { ascending: false, nullsFirst: false });
+            if (reloadedConvs && reloadedConvs.length > 0) {
+              convData = reloadedConvs;
+            }
+          }
+        }
+      }
 
       if (!convError && convData && convData.length > 0) {
         const conversations = convData as DatabaseConversation[];
@@ -191,14 +231,14 @@ export async function fetchConversations(
           });
         }
 
-        return conversations.map((c) => {
+        const result: DirectConversationPreview[] = conversations.map((c) => {
           const otherId = c.user1_id === currentUserId ? c.user2_id : c.user1_id;
           const profile = profileMap.get(otherId);
 
           return {
             id: c.id,
             participantId: otherId,
-            participantName: profile?.displayName || 'Unknown Member',
+            participantName: profile?.displayName || 'Chat Partner',
             participantUsername: profile?.username || 'member',
             isOnline: profile?.isOnline ?? true,
             lastMessageSnippet: c.last_message_text || 'No messages yet.',
@@ -208,15 +248,23 @@ export async function fetchConversations(
             unreadCount: 0,
           };
         });
+
+        // Cache to user-scoped storage
+        await AsyncStorage.setItem(
+          getConversationsStorageKey(currentUserId),
+          JSON.stringify(result)
+        );
+
+        return result;
       }
     } catch {
       // Fall through to local storage
     }
   }
 
-  // 2. Fetch from local conversations index
+  // 2. Fetch from user-scoped local conversations index
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    const raw = await AsyncStorage.getItem(getConversationsStorageKey(currentUserId));
     if (raw) {
       const list = JSON.parse(raw) as DirectConversationPreview[];
       if (list && list.length > 0) {
@@ -227,8 +275,8 @@ export async function fetchConversations(
     // Ignore
   }
 
-  // 3. Check canonical conversation message storage
-  const isJana = currentUserId === 'user_jana' || currentUserId.includes('jana');
+  // 3. Fallback for offline/mock testing
+  const isJana = currentUserId.toLowerCase().includes('jana');
   const peer = isJana
     ? { id: 'user_krish', name: 'krish', username: 'krish' }
     : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
@@ -250,7 +298,10 @@ export async function fetchConversations(
           lastMessageTimestamp: last.createdAt,
           unreadCount: 0,
         };
-        await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify([preview]));
+        await AsyncStorage.setItem(
+          getConversationsStorageKey(currentUserId),
+          JSON.stringify([preview])
+        );
         return [preview];
       }
     }
@@ -258,7 +309,17 @@ export async function fetchConversations(
     // Ignore
   }
 
-  return [];
+  const defaultPreview: DirectConversationPreview = {
+    id: canonicalConvId,
+    participantId: peer.id,
+    participantName: peer.name,
+    participantUsername: peer.username,
+    isOnline: true,
+    lastMessageSnippet: 'No messages yet.',
+    lastMessageTimestamp: 'Just now',
+    unreadCount: 0,
+  };
+  return [defaultPreview];
 }
 
 /**
@@ -316,28 +377,22 @@ export async function getOrCreateConversation(
   targetUserId: string,
   currentUserId?: string
 ): Promise<{ conversationId: string | null; error: string | null }> {
-  const canonicalConvId = getCanonicalConversationId(currentUserId || 'user_me', targetUserId);
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.rpc('get_or_create_conversation', {
+        target_user_id: targetUserId,
+      });
 
-  if (!isSupabaseConfigured) {
-    return {
-      conversationId: canonicalConvId,
-      error: null,
-    };
-  }
-
-  try {
-    const { data, error } = await supabase.rpc('get_or_create_conversation', {
-      target_user_id: targetUserId,
-    });
-
-    if (error || !data) {
-      return { conversationId: canonicalConvId, error: null };
+      if (!error && data) {
+        return { conversationId: data as string, error: null };
+      }
+    } catch {
+      // Fallback
     }
-
-    return { conversationId: data as string, error: null };
-  } catch {
-    return { conversationId: canonicalConvId, error: null };
   }
+
+  const canonicalConvId = getCanonicalConversationId(currentUserId || 'user_me', targetUserId);
+  return { conversationId: canonicalConvId, error: null };
 }
 
 /**
@@ -350,9 +405,7 @@ export async function fetchMessages(
   participantName: string,
   limit = 100
 ): Promise<DirectMessage[]> {
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
+  const canonicalId = conversationId;
 
   let localMessages: DirectMessage[] = [];
 
@@ -445,9 +498,7 @@ export async function deleteMessageForEveryone(
   messageId: string,
   currentUserId: string
 ): Promise<{ success: boolean; error: string | null }> {
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
+  const canonicalId = conversationId;
 
   try {
     const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
@@ -483,7 +534,7 @@ export async function deleteMessageForEveryone(
     list[targetIndex] = updatedMsg;
 
     await AsyncStorage.setItem(key, JSON.stringify(list));
-    await updateConversationSummaryLocally(canonicalId, updatedMsg);
+    await updateConversationSummaryLocally(canonicalId, updatedMsg, currentUserId);
 
     // Broadcast delete event over Supabase Realtime
     if (isSupabaseConfigured) {
@@ -542,9 +593,7 @@ export async function deleteMessageForMe(
   messageId: string,
   currentUserId: string
 ): Promise<{ success: boolean; error: string | null }> {
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
+  const canonicalId = conversationId;
 
   try {
     const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
@@ -569,7 +618,7 @@ export async function deleteMessageForMe(
     // Update conversation summary to last visible message
     const visibleList = list.filter((m) => !m.deletedForUsers?.includes(currentUserId));
     if (visibleList.length > 0) {
-      await updateConversationSummaryLocally(canonicalId, visibleList[visibleList.length - 1]);
+      await updateConversationSummaryLocally(canonicalId, visibleList[visibleList.length - 1], currentUserId);
     }
 
     return { success: true, error: null };
@@ -591,9 +640,7 @@ export async function toggleMessageReaction(
   emoji: string,
   currentUserId: string
 ): Promise<{ success: boolean; reactions?: MessageReaction[]; error: string | null }> {
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
+  const canonicalId = conversationId;
 
   try {
     const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
@@ -668,7 +715,8 @@ export async function toggleMessageReaction(
 export async function sendDirectMessage(
   conversationId: string,
   content: string,
-  currentUserId: string
+  currentUserId: string,
+  participantName?: string
 ): Promise<{ data: DirectMessage | null; error: string | null }> {
   const trimmed = content.trim();
   if (!trimmed) {
@@ -679,13 +727,33 @@ export async function sendDirectMessage(
     return { data: null, error: 'Message exceeds 5,000 character limit.' };
   }
 
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
-
+  const canonicalId = conversationId;
   const now = Date.now();
+  let messageId = `msg_${now}_${Math.random().toString(36).substring(2, 7)}`;
+
+  // 1. Push to cloud database if Supabase is configured
+  if (isSupabaseConfigured && currentUserId) {
+    try {
+      const { data: dbMsg, error: dbError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: canonicalId,
+          sender_id: currentUserId,
+          content: trimmed,
+        })
+        .select('id, created_at')
+        .single();
+
+      if (!dbError && dbMsg) {
+        messageId = dbMsg.id;
+      }
+    } catch {
+      // Fallback to local message ID
+    }
+  }
+
   const newMsg: DirectMessage = {
-    id: `msg_${now}_${Math.random().toString(36).substring(2, 7)}`,
+    id: messageId,
     conversationId: canonicalId,
     senderId: currentUserId,
     senderName: 'You',
@@ -696,38 +764,33 @@ export async function sendDirectMessage(
     status: 'sent',
   };
 
-  // 1. Immediately save to local persistent storage (NEVER LOST)
-  await saveMessageToLocalHistory(canonicalId, newMsg);
+  // 2. Immediately save to local persistent storage (NEVER LOST)
+  await saveMessageToLocalHistory(canonicalId, newMsg, currentUserId, participantName);
 
-  // 2. Broadcast immediately over Supabase Realtime to room channel AND global channel
+  // 3. Broadcast immediately over Supabase Realtime to room channel AND global channel
   if (isSupabaseConfigured) {
     try {
       const roomChannel = supabase.channel(`room_${canonicalId}`);
       roomChannel.send({
         type: 'broadcast',
         event: 'new_message',
-        payload: newMsg,
+        payload: {
+          ...newMsg,
+          senderName: participantName || 'Member',
+        },
       });
 
       const globalChannel = supabase.channel('conversations_global');
       globalChannel.send({
         type: 'broadcast',
         event: 'new_message',
-        payload: newMsg,
+        payload: {
+          ...newMsg,
+          senderName: participantName || 'Member',
+        },
       });
     } catch {
       // Ignore broadcast errors
-    }
-
-    // 3. Push to cloud database if table exists
-    try {
-      await supabase.from('messages').insert({
-        conversation_id: canonicalId,
-        sender_id: currentUserId,
-        content: trimmed,
-      });
-    } catch {
-      // Ignore if table does not exist
     }
   }
 
@@ -752,10 +815,7 @@ export function subscribeToConversationMessages(
     return () => {};
   }
 
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
-
+  const canonicalId = conversationId;
   const channelName = `room_${canonicalId}`;
   const channel = supabase
     .channel(channelName)
@@ -771,7 +831,7 @@ export function subscribeToConversationMessages(
         };
 
         // Save incoming message to local storage immediately
-        await saveMessageToLocalHistory(canonicalId, incoming);
+        await saveMessageToLocalHistory(canonicalId, incoming, currentUserId, participantName);
         onNewMessage(incoming);
       }
     })
@@ -790,7 +850,7 @@ export function subscribeToConversationMessages(
               isDeletedForEveryone: true,
             };
             await AsyncStorage.setItem(key, JSON.stringify(list));
-            await updateConversationSummaryLocally(canonicalId, list[idx]);
+            await updateConversationSummaryLocally(canonicalId, list[idx], currentUserId, participantName);
           }
         }
         onMessageDeleted?.(payload.messageId);
@@ -843,7 +903,7 @@ export function subscribeToConversationMessages(
         onTypingStatus?.(Boolean(payload.isTyping));
       }
     })
-    // 3. P2P History Sync Request: Peer asking for chat history
+    // 6. P2P History Sync Request: Peer asking for chat history
     .on('broadcast', { event: 'sync_request' }, async ({ payload }) => {
       if (payload && payload.requesterId !== currentUserId) {
         try {
@@ -864,10 +924,10 @@ export function subscribeToConversationMessages(
         }
       }
     })
-    // 4. P2P History Sync Response: Peer sent historical messages
+    // 7. P2P History Sync Response: Peer sent historical messages
     .on('broadcast', { event: 'sync_response' }, async ({ payload }) => {
       if (payload && payload.messages && Array.isArray(payload.messages)) {
-        const merged = await mergeMessagesToLocalHistory(canonicalId, payload.messages);
+        const merged = await mergeMessagesToLocalHistory(canonicalId, payload.messages, currentUserId, participantName);
         if (merged.length > 0 && onSyncHistory) {
           const mapped = merged.map((m) => ({
             ...m,
@@ -878,7 +938,7 @@ export function subscribeToConversationMessages(
         }
       }
     })
-    // 5. PostgreSQL Database Replication
+    // 8. PostgreSQL Database Replication
     .on(
       'postgres_changes',
       {
@@ -900,7 +960,7 @@ export function subscribeToConversationMessages(
             isOutgoing: false,
             status: raw.read_at ? 'read' : 'delivered',
           };
-          await saveMessageToLocalHistory(canonicalId, incoming);
+          await saveMessageToLocalHistory(canonicalId, incoming, currentUserId, participantName);
           onNewMessage(incoming);
         }
       }
@@ -943,7 +1003,7 @@ export function subscribeToConversationsList(
         await saveMessageToLocalHistory(msg.conversationId, {
           ...msg,
           isOutgoing: false,
-        });
+        }, currentUserId);
       }
       onUpdate();
     })
@@ -985,10 +1045,7 @@ export async function markConversationAsRead(
     return;
   }
 
-  const canonicalId =
-    currentUserId && !conversationId.startsWith('conv_')
-      ? getCanonicalConversationId(conversationId, currentUserId)
-      : conversationId;
+  const canonicalId = conversationId;
 
   try {
     const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
@@ -1010,14 +1067,15 @@ export async function markConversationAsRead(
       }
     }
 
-    // Reset unread count in conversations index
-    const rawConvs = await AsyncStorage.getItem(STORAGE_CONVERSATIONS_KEY);
+    // Reset unread count in user's conversations index
+    const storageKey = getConversationsStorageKey(currentUserId);
+    const rawConvs = await AsyncStorage.getItem(storageKey);
     if (rawConvs) {
       const convList: DirectConversationPreview[] = JSON.parse(rawConvs);
       const targetIdx = convList.findIndex((c) => c.id === canonicalId);
       if (targetIdx !== -1 && convList[targetIdx].unreadCount > 0) {
         convList[targetIdx] = { ...convList[targetIdx], unreadCount: 0 };
-        await AsyncStorage.setItem(STORAGE_CONVERSATIONS_KEY, JSON.stringify(convList));
+        await AsyncStorage.setItem(storageKey, JSON.stringify(convList));
       }
     }
 
@@ -1074,9 +1132,7 @@ export function sendTypingStatus(
     return;
   }
 
-  const canonicalId = conversationId.startsWith('conv_')
-    ? conversationId
-    : getCanonicalConversationId(conversationId, currentUserId);
+  const canonicalId = conversationId;
 
   try {
     const roomChannel = supabase.channel(`room_${canonicalId}`);
