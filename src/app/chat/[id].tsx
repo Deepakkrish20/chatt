@@ -106,6 +106,31 @@ export default function PrivateChatScreen() {
     };
   }, [conversationId, currentUserId]);
 
+  // Resolve real conversation UUID if opened with stale 'conv_*' parameter
+  useEffect(() => {
+    if (!isSupabaseConfigured || !conversationId || !conversationId.startsWith('conv_') || !currentUserId) {
+      return;
+    }
+    supabase
+      .from('conversations')
+      .select('id')
+      .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
+      .limit(1)
+      .then(({ data: convs }) => {
+        if (convs && convs.length > 0) {
+          const realId = convs[0].id;
+          router.replace({
+            pathname: '/chat/[id]',
+            params: {
+              id: realId,
+              name: participantName,
+              online: isOnline ? 'true' : 'false',
+            },
+          });
+        }
+      });
+  }, [conversationId, currentUserId, participantName, isOnline]);
+
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);

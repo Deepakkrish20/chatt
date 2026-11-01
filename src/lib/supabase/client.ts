@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
 const DEFAULT_SUPABASE_URL = 'https://wxgatugyxopsznhlaodi.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =
@@ -26,10 +25,10 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-anon-key',
   {
     auth: {
-      storage: Platform.OS === 'web' ? undefined : AsyncStorage,
+      storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: Platform.OS === 'web',
+      detectSessionInUrl: false,
     },
   }
 );
