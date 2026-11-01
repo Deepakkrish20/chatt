@@ -16,16 +16,41 @@ export const isSupabaseConfigured = Boolean(
 );
 
 /**
+ * SSR-safe storage adapter for Supabase.
+ * In Node.js / SSR server rendering (where window is undefined), returns null safely.
+ * On browser and native mobile runtimes, delegates to AsyncStorage.
+ */
+const SafeAsyncStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return AsyncStorage.getItem(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    return AsyncStorage.setItem(key, value);
+  },
+  removeItem: async (key: string): Promise<void> => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    return AsyncStorage.removeItem(key);
+  },
+};
+
+/**
  * Supabase client configured for Expo and React Native.
- * Uses AsyncStorage for mobile session persistence and token caching.
- * On Web, uses window.localStorage automatically.
+ * Uses SafeAsyncStorage for mobile and web session persistence and token caching.
  */
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder-chatt.supabase.co',
   supabaseAnonKey || 'placeholder-anon-key',
   {
     auth: {
-      storage: AsyncStorage,
+      storage: SafeAsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
