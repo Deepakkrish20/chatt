@@ -18,7 +18,7 @@ export function MessageComposer({
   disabled = false,
   bottomInset = 0,
 }: MessageComposerProps) {
-  const { colors, spacing, radius, typography } = useAppTheme();
+  const { colors, typography } = useAppTheme();
   const [text, setText] = useState('');
   const [buttonScale] = useState(() => new Animated.Value(1));
   const useNativeDriver = Platform.OS !== 'web';
@@ -98,43 +98,49 @@ export function MessageComposer({
   return (
     <View
       style={[
-        styles.container,
+        styles.outerContainer,
         {
           backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          paddingHorizontal: spacing.md,
-          paddingTop: spacing.sm + 2,
-          paddingBottom: bottomInset > 0 ? bottomInset : spacing.sm + 2,
+          borderTopColor: colors.borderSubtle,
+          paddingTop: 6,
+          paddingBottom: bottomInset > 0 ? bottomInset : 8,
+          paddingHorizontal: 8,
         },
       ]}
     >
-      <View
-        style={[
-          styles.inputContainer,
-          {
-            backgroundColor: colors.inputBackground,
-            borderColor: colors.border,
-            borderRadius: radius.xl,
-            paddingHorizontal: spacing.md,
-          },
-        ]}
-      >
-        <TextInput
-          value={text}
-          onChangeText={handleTextChange}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
-          editable={!disabled}
-          multiline
-          textAlignVertical="center"
-          onKeyPress={handleKeyPress}
+      <View style={styles.composerRow}>
+        {/* Floating Capsule Input */}
+        <View
           style={[
-            typography.body,
-            styles.input,
-            { color: disabled ? colors.textMuted : colors.text },
+            styles.inputCapsule,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+            },
           ]}
-        />
+        >
+          <View style={styles.lockIconBox}>
+            <AppIcon name="lock" size={15} color={colors.textMuted} />
+          </View>
 
+          <TextInput
+            value={text}
+            onChangeText={handleTextChange}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+            editable={!disabled}
+            multiline
+            textAlignVertical="center"
+            onKeyPress={handleKeyPress}
+            style={[
+              typography.body,
+              styles.input,
+              { color: disabled ? colors.textMuted : colors.text },
+            ]}
+          />
+        </View>
+
+        {/* Standalone Circular Action / Send FAB */}
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
             disabled={!canSend}
@@ -142,11 +148,22 @@ export function MessageComposer({
             onPressOut={handlePressOut}
             onPress={handleSend}
             style={({ pressed }) => [
-              styles.sendButton,
-              {
-                backgroundColor: canSend ? colors.buttonPrimaryBg : colors.surfaceSecondary,
-                opacity: pressed ? 0.8 : 1,
-              },
+              styles.sendFab,
+              canSend
+                ? [
+                    styles.sendFabActive,
+                    {
+                      backgroundColor: colors.buttonPrimaryBg,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]
+                : [
+                    styles.sendFabInactive,
+                    {
+                      backgroundColor: colors.surfaceSecondary,
+                      borderColor: colors.border,
+                    },
+                  ],
             ]}
             accessibilityRole="button"
             accessibilityLabel="Send message"
@@ -154,8 +171,8 @@ export function MessageComposer({
           >
             <AppIcon
               name="send"
-              size={14}
-              color={canSend ? colors.buttonPrimaryText : colors.textMuted}
+              size={16}
+              color={canSend ? '#FFFFFF' : colors.textMuted}
             />
           </Pressable>
         </Animated.View>
@@ -165,29 +182,53 @@ export function MessageComposer({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderTopWidth: 1,
+  outerContainer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
     width: '100%',
   },
-  inputContainer: {
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  inputCapsule: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    minHeight: 46,
+    borderRadius: 24,
+    minHeight: 44,
     maxHeight: 120,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  lockIconBox: {
+    paddingRight: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   input: {
     flex: 1,
-    paddingVertical: 6,
+    fontSize: 15,
+    lineHeight: 20,
+    paddingVertical: 8,
     maxHeight: 100,
   },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sendFab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+  },
+  sendFabActive: {
+    shadowColor: '#00A884',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sendFabInactive: {
+    borderWidth: 1,
   },
 });
