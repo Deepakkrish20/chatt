@@ -4,13 +4,14 @@ import {
   View,
   FlatList,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
   Pressable,
   Modal,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
   ThemedView,
@@ -43,6 +44,8 @@ const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏',
 
 export default function PrivateChatScreen() {
   const { colors, spacing, radius, typography } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const { user, profile, recordActivity } = useAuth();
   const params = useLocalSearchParams<{
     id: string;
@@ -407,6 +410,32 @@ export default function PrivateChatScreen() {
     return () => clearTimeout(timer);
   }, [messages.length, isPeerTyping]);
 
+  // Auto scroll to bottom when keyboard appears (like WhatsApp / Instagram)
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 80);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // When keyboard is visible, soft keyboard provides bottom spacing.
+  // When keyboard is closed, pad for navigation bar / gesture home indicator.
+  const composerBottomInset = isKeyboardVisible ? 0 : Math.max(insets.bottom, 0);
+
   const handleSendMessage = async (content: string) => {
     if (isSending || !content.trim()) return;
 
@@ -665,7 +694,7 @@ export default function PrivateChatScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardContainer}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           {/* Message Thread */}
           {Boolean(isLoading) ? (
@@ -684,6 +713,8 @@ export default function PrivateChatScreen() {
               ref={flatListRef}
               data={messages}
               keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               onScrollToIndexFailed={(info) => {
                 flatListRef.current?.scrollToOffset({
                   offset: info.averageItemLength * info.index,
@@ -701,7 +732,12 @@ export default function PrivateChatScreen() {
               )}
               contentContainerStyle={[
                 styles.messageList,
-                { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+                {
+                  paddingHorizontal: spacing.md,
+                  paddingTop: spacing.md,
+                  paddingBottom: spacing.sm,
+                  justifyContent: messages.length === 0 ? 'center' : undefined,
+                },
               ]}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
@@ -769,6 +805,7 @@ export default function PrivateChatScreen() {
             onSendMessage={handleSendMessage}
             onTyping={handleUserTyping}
             disabled={isSending}
+            bottomInset={composerBottomInset}
           />
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -1226,7 +1263,6 @@ const styles = StyleSheet.create({
   },
   messageList: {
     flexGrow: 1,
-    justifyContent: 'flex-end',
   },
   typingRow: {
     flexDirection: 'row',

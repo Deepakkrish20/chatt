@@ -8,6 +8,7 @@ export interface MessageComposerProps {
   onTyping?: (isTyping: boolean) => void;
   placeholder?: string;
   disabled?: boolean;
+  bottomInset?: number;
 }
 
 export function MessageComposer({
@@ -15,6 +16,7 @@ export function MessageComposer({
   onTyping,
   placeholder = 'Encrypted message…',
   disabled = false,
+  bottomInset = 0,
 }: MessageComposerProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const [text, setText] = useState('');
@@ -101,7 +103,8 @@ export function MessageComposer({
           backgroundColor: colors.background,
           borderTopColor: colors.border,
           paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm + 2,
+          paddingTop: spacing.sm + 2,
+          paddingBottom: bottomInset > 0 ? bottomInset : spacing.sm + 2,
         },
       ]}
     >
@@ -123,6 +126,7 @@ export function MessageComposer({
           placeholderTextColor={colors.textMuted}
           editable={!disabled}
           multiline
+          textAlignVertical="center"
           onKeyPress={handleKeyPress}
           style={[
             typography.body,
