@@ -845,7 +845,7 @@ export default function PrivateChatScreen() {
               {
                 backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
-                borderRadius: radius.xl,
+                borderRadius: 16,
                 padding: spacing.lg,
               },
             ]}
@@ -858,8 +858,8 @@ export default function PrivateChatScreen() {
                   styles.modalIconBox,
                   {
                     backgroundColor: colors.surfaceSecondary,
-                    borderColor: colors.border,
-                    borderRadius: radius.full,
+                    borderColor: colors.borderSubtle,
+                    borderRadius: 10,
                   },
                 ]}
               >
@@ -1165,7 +1165,7 @@ export default function PrivateChatScreen() {
               {
                 backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
-                borderRadius: radius.xl,
+                borderRadius: 16,
                 padding: spacing.md,
               },
             ]}
@@ -1175,9 +1175,9 @@ export default function PrivateChatScreen() {
               <ThemedText
                 variant="label"
                 tone="muted"
-                style={{ textTransform: 'uppercase', letterSpacing: 1 }}
+                style={{ textTransform: 'uppercase', letterSpacing: 1.5, fontSize: 11 }}
               >
-                React to Message
+                Telemetry Reaction
               </ThemedText>
             </View>
 
@@ -1198,7 +1198,7 @@ export default function PrivateChatScreen() {
                         backgroundColor: isSelectedByMe
                           ? colors.surfaceSecondary
                           : 'transparent',
-                        borderColor: isSelectedByMe ? colors.border : 'transparent',
+                        borderColor: isSelectedByMe ? colors.accent : 'transparent',
                         transform: [{ scale: pressed ? 1.25 : 1 }],
                       },
                     ]}
@@ -1299,8 +1299,14 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 400,
     borderWidth: 1,
+    borderRadius: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -1382,9 +1388,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   emojiButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
