@@ -287,8 +287,8 @@ export default function ChatListScreen() {
                   styles.slotDot,
                   {
                     backgroundColor:
-                      i < capacity.activeMembers ? colors.text : 'transparent',
-                    borderColor: colors.textMuted,
+                      i < capacity.activeMembers ? colors.accent : 'transparent',
+                    borderColor: i < capacity.activeMembers ? colors.accent : colors.textMuted,
                   },
                 ]}
               />

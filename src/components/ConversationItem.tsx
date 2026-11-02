@@ -11,7 +11,7 @@ export interface ConversationItemProps {
 }
 
 export function ConversationItem({ conversation, onPress }: ConversationItemProps) {
-  const { colors, spacing, radius, typography } = useAppTheme();
+  const { colors, spacing, typography } = useAppTheme();
   const [scaleAnim] = useState(() => new Animated.Value(1));
   const useNativeDriver = Platform.OS !== 'web';
 
@@ -34,7 +34,7 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
   const hasUnread = conversation.unreadCount > 0;
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], marginHorizontal: spacing.md, marginVertical: 4 }}>
       <Pressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -42,10 +42,12 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
         style={({ pressed }) => [
           styles.container,
           {
-            backgroundColor: pressed ? colors.surfaceSecondary : colors.background,
-            borderBottomColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
+            borderColor: colors.borderSubtle,
+            borderWidth: 1,
+            borderRadius: 14,
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.md,
+            paddingVertical: spacing.sm + 4,
           },
         ]}
         accessibilityRole="button"
@@ -75,7 +77,7 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
               numberOfLines={1}
               style={[
                 styles.snippet,
-                hasUnread ? { fontWeight: '500' } : null,
+                hasUnread ? { fontWeight: '600' } : null,
               ]}
             >
               {conversation.lastMessageSnippet}
@@ -87,14 +89,14 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
                   styles.badge,
                   {
                     backgroundColor: colors.badgeBg,
-                    borderRadius: radius.full,
-                    paddingHorizontal: spacing.xs + 3,
+                    borderRadius: 8,
+                    paddingHorizontal: 7,
                     paddingVertical: 2,
                     marginLeft: spacing.sm,
                   },
                 ]}
               >
-                <Text style={[typography.label, { color: colors.badgeText, fontSize: 10 }]}>
+                <Text style={[typography.label, { color: colors.badgeText, fontSize: 10, fontWeight: '700' }]}>
                   {conversation.unreadCount}
                 </Text>
               </View>
@@ -110,8 +112,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 72,
+    minHeight: 70,
   },
   content: {
     flex: 1,

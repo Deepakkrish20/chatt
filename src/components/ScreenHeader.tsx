@@ -55,7 +55,7 @@ export function ScreenHeader({
       style={[
         styles.container,
         {
-          backgroundColor: colors.background,
+          backgroundColor: colors.surfaceElevated,
           borderBottomColor: colors.border,
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.sm + 4,

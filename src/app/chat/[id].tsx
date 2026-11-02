@@ -525,7 +525,12 @@ export default function PrivateChatScreen() {
                 }}
                 style={({ pressed }) => [
                   styles.headerIconBtn,
-                  { opacity: pressed ? 0.6 : 1 },
+                  {
+                    backgroundColor: isSearchActive ? colors.surfaceSecondary : 'transparent',
+                    borderColor: isSearchActive ? colors.border : 'transparent',
+                    borderWidth: 1,
+                    opacity: pressed ? 0.6 : 1,
+                  },
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Search messages in chat"
@@ -657,15 +662,18 @@ export default function PrivateChatScreen() {
             styles.securityNotice,
             {
               backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
+              borderColor: colors.borderSubtle,
               paddingVertical: spacing.xs + 2,
               paddingHorizontal: spacing.md,
             },
           ]}
         >
-          <ThemedText variant="label" tone="muted" style={{ textAlign: 'center' }}>
-            PRIVATE 1:1 CHANNEL • DEVICE-ISOLATED
-          </ThemedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent }} />
+            <ThemedText variant="label" tone="muted" style={{ textAlign: 'center', letterSpacing: 0.5 }}>
+              ENCRYPTED 1:1 CHANNEL • HARDWARE-ISOLATED
+            </ThemedText>
+          </View>
         </View>
 
         {/* Send Error Banner */}
