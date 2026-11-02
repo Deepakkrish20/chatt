@@ -102,45 +102,47 @@ export function MessageComposer({
         {
           backgroundColor: colors.background,
           borderTopColor: colors.borderSubtle,
-          paddingTop: 6,
-          paddingBottom: bottomInset > 0 ? bottomInset : 8,
-          paddingHorizontal: 8,
+          paddingTop: 8,
+          paddingBottom: bottomInset > 0 ? bottomInset : 10,
+          paddingHorizontal: 12,
         },
       ]}
     >
-      <View style={styles.composerRow}>
-        {/* Floating Capsule Input */}
-        <View
-          style={[
-            styles.inputCapsule,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.lockIconBox}>
-            <AppIcon name="lock" size={15} color={colors.textMuted} />
-          </View>
-
-          <TextInput
-            value={text}
-            onChangeText={handleTextChange}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            editable={!disabled}
-            multiline
-            textAlignVertical="center"
-            onKeyPress={handleKeyPress}
-            style={[
-              typography.body,
-              styles.input,
-              { color: disabled ? colors.textMuted : colors.text },
-            ]}
+      {/* Monolithic Cyber Terminal Dock */}
+      <View
+        style={[
+          styles.monolithicDock,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: canSend ? colors.buttonPrimaryBg : colors.border,
+          },
+        ]}
+      >
+        <View style={styles.dockIconBox}>
+          <AppIcon
+            name="lock"
+            size={14}
+            color={canSend ? colors.accent : colors.textMuted}
           />
         </View>
 
-        {/* Standalone Circular Action / Send FAB */}
+        <TextInput
+          value={text}
+          onChangeText={handleTextChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          editable={!disabled}
+          multiline
+          textAlignVertical="center"
+          onKeyPress={handleKeyPress}
+          style={[
+            typography.body,
+            styles.input,
+            { color: disabled ? colors.textMuted : colors.text },
+          ]}
+        />
+
+        {/* Integrated Squircle Send Button */}
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
             disabled={!canSend}
@@ -148,20 +150,20 @@ export function MessageComposer({
             onPressOut={handlePressOut}
             onPress={handleSend}
             style={({ pressed }) => [
-              styles.sendFab,
+              styles.dockSendBtn,
               canSend
                 ? [
-                    styles.sendFabActive,
+                    styles.dockSendBtnActive,
                     {
                       backgroundColor: colors.buttonPrimaryBg,
-                      opacity: pressed ? 0.85 : 1,
+                      opacity: pressed ? 0.8 : 1,
                     },
                   ]
                 : [
-                    styles.sendFabInactive,
+                    styles.dockSendBtnInactive,
                     {
                       backgroundColor: colors.surfaceSecondary,
-                      borderColor: colors.border,
+                      borderColor: colors.borderSubtle,
                     },
                   ],
             ]}
@@ -171,7 +173,7 @@ export function MessageComposer({
           >
             <AppIcon
               name="send"
-              size={16}
+              size={14}
               color={canSend ? '#FFFFFF' : colors.textMuted}
             />
           </Pressable>
@@ -186,24 +188,23 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     width: '100%',
   },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  inputCapsule: {
-    flex: 1,
+  monolithicDock: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 24,
-    minHeight: 44,
+    borderRadius: 14,
+    minHeight: 46,
     maxHeight: 120,
-    paddingHorizontal: 12,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  lockIconBox: {
-    paddingRight: 6,
+  dockIconBox: {
+    paddingHorizontal: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -211,24 +212,26 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     lineHeight: 20,
-    paddingVertical: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
     maxHeight: 100,
   },
-  sendFab: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  dockSendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 6,
   },
-  sendFabActive: {
-    shadowColor: '#00A884',
+  dockSendBtnActive: {
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.4,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 3,
   },
-  sendFabInactive: {
-    borderWidth: 1,
+  dockSendBtnInactive: {
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });

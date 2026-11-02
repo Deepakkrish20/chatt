@@ -12,13 +12,30 @@ export interface AppAvatarProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const AVATAR_PALETTES = [
+  { bg: '#172554', border: '#3B82F6', text: '#DBEAFE' }, // Deep Sapphire Cobalt
+  { bg: '#1E1B4B', border: '#818CF8', text: '#EDE9FE' }, // Midnight Indigo
+  { bg: '#2E1065', border: '#C084FC', text: '#F3E8FF' }, // Deep Amethyst
+  { bg: '#0F2838', border: '#06B6D4', text: '#CFFAFE' }, // Cyber Cyan
+  { bg: '#1E293B', border: '#64748B', text: '#F8FAFC' }, // Stealth Titanium
+];
+
+const getAvatarTheme = (str: string) => {
+  let hash = 0;
+  const clean = (str || 'User').trim();
+  for (let i = 0; i < clean.length; i++) {
+    hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTES[Math.abs(hash) % AVATAR_PALETTES.length];
+};
+
 export function AppAvatar({
   name,
   size = 'md',
   isOnline,
   style,
 }: AppAvatarProps) {
-  const { colors, radius, typography } = useAppTheme();
+  const { colors, typography } = useAppTheme();
 
   const getDimensions = () => {
     switch (size) {
@@ -31,11 +48,13 @@ export function AppAvatar({
       case 'md':
       default:
         return { dimension: 46, fontStyle: typography.bodySemibold, dotSize: 10 };
-    }
+      }
   };
 
   const { dimension, fontStyle, dotSize } = getDimensions();
   const initials = getInitials(name);
+  const avatarTheme = getAvatarTheme(name);
+  const squircleRadius = Math.round(dimension * 0.28);
 
   return (
     <View style={[{ width: dimension, height: dimension }, style]}>
@@ -45,13 +64,16 @@ export function AppAvatar({
           {
             width: dimension,
             height: dimension,
-            borderRadius: radius.full,
-            backgroundColor: colors.surfaceSecondary,
-            borderColor: colors.border,
+            borderRadius: squircleRadius,
+            backgroundColor: avatarTheme.bg,
+            borderColor: avatarTheme.border,
+            borderWidth: 1,
           },
         ]}
       >
-        <Text style={[fontStyle, { color: colors.text }]}>{initials}</Text>
+        <Text style={[fontStyle, { color: avatarTheme.text, fontWeight: '700' }]}>
+          {initials}
+        </Text>
       </View>
 
       {isOnline ? (
@@ -65,8 +87,8 @@ export function AppAvatar({
               backgroundColor: colors.onlineIndicator,
               borderColor: colors.background,
               borderWidth: 2,
-              bottom: 0,
-              right: 0,
+              bottom: -1,
+              right: -1,
             },
           ]}
         />

@@ -130,27 +130,22 @@ export function MessageBubble({
           style={({ pressed }) => [
             styles.bubble,
             {
-              paddingHorizontal: spacing.sm + 4,
-              paddingTop: spacing.sm,
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.sm + 2,
               paddingBottom: spacing.xs + 3,
+              borderRadius: 14,
               opacity: pressed && (onLongPress || onDoubleTap) ? 0.8 : 1,
             },
             isOutgoing
               ? {
                   backgroundColor: isDeleted ? colors.surfaceSecondary : colors.bubbleOutgoingBg,
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                  borderBottomLeftRadius: 16,
-                  borderBottomRightRadius: 3,
+                  borderColor: isDeleted ? colors.border : '#3B82F6',
+                  borderWidth: 1,
                 }
               : {
                   backgroundColor: colors.bubbleIncomingBg,
                   borderColor: colors.bubbleIncomingBorder,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                  borderBottomRightRadius: 16,
-                  borderBottomLeftRadius: 3,
+                  borderWidth: 1,
                 },
           ]}
         >
