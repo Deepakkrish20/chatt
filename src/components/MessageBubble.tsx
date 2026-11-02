@@ -83,8 +83,10 @@ export function MessageBubble({
             key={index}
             style={{
               backgroundColor: '#38BDF8',
-              color: '#000000',
+              color: '#091017',
               fontWeight: '700',
+              borderRadius: 3,
+              paddingHorizontal: 2,
             }}
           >
             {part}
@@ -101,7 +103,7 @@ export function MessageBubble({
         styles.row,
         {
           justifyContent: isOutgoing ? 'flex-end' : 'flex-start',
-          marginBottom: hasReactions ? spacing.md + 6 : spacing.sm + 2,
+          marginBottom: hasReactions ? 18 : 6,
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
         },
@@ -128,32 +130,38 @@ export function MessageBubble({
           style={({ pressed }) => [
             styles.bubble,
             {
-              borderRadius: radius.lg,
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.sm + 3,
-              opacity: pressed && (onLongPress || onDoubleTap) ? 0.75 : 1,
+              paddingHorizontal: spacing.sm + 4,
+              paddingTop: spacing.sm,
+              paddingBottom: spacing.xs + 3,
+              opacity: pressed && (onLongPress || onDoubleTap) ? 0.8 : 1,
             },
             isOutgoing
               ? {
                   backgroundColor: isDeleted ? colors.surfaceSecondary : colors.bubbleOutgoingBg,
-                  borderBottomRightRadius: radius.xs,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  borderBottomLeftRadius: 16,
+                  borderBottomRightRadius: 3,
                 }
               : {
                   backgroundColor: colors.bubbleIncomingBg,
                   borderColor: colors.bubbleIncomingBorder,
-                  borderWidth: 1,
-                  borderBottomLeftRadius: radius.xs,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  borderBottomRightRadius: 16,
+                  borderBottomLeftRadius: 3,
                 },
           ]}
         >
           {isDeleted ? (
             <View style={styles.deletedContainer}>
-              <AppIcon name="ban" size={13} color="#737373" />
+              <AppIcon name="ban" size={13} color={colors.textMuted} />
               <Text
                 style={[
                   typography.caption,
                   styles.deletedText,
-                  { color: '#737373' },
+                  { color: colors.textMuted },
                 ]}
               >
                 This message was deleted
@@ -165,7 +173,8 @@ export function MessageBubble({
                 typography.body,
                 {
                   color: isOutgoing ? colors.bubbleOutgoingText : colors.bubbleIncomingText,
-                  lineHeight: 21,
+                  fontSize: 15,
+                  lineHeight: 20,
                 },
               ]}
             >
@@ -180,7 +189,7 @@ export function MessageBubble({
                 {
                   fontSize: 10,
                   color: isOutgoing ? colors.bubbleOutgoingTime : colors.bubbleIncomingTime,
-                  marginRight: isOutgoing && !isDeleted ? 4 : 0,
+                  marginRight: isOutgoing && !isDeleted ? 3 : 0,
                 },
               ]}
             >
@@ -201,7 +210,7 @@ export function MessageBubble({
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.optionsTrigger,
-                  { opacity: pressed ? 0.4 : 0.75, marginLeft: 6 },
+                  { opacity: pressed ? 0.4 : 0.75, marginLeft: 4 },
                 ]}
                 accessibilityLabel="Message options"
               >
@@ -248,7 +257,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bubble: {
-    shadowColor: 'transparent',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 1,
   },
   deletedContainer: {
     flexDirection: 'row',
@@ -263,7 +276,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: 4,
+    marginTop: 2,
   },
   optionsTrigger: {
     justifyContent: 'center',
@@ -276,13 +289,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     gap: 4,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
     elevation: 3,
     zIndex: 2,
   },
