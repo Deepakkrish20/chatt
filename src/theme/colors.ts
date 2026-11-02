@@ -1,69 +1,74 @@
 /**
- * Raw Black Monochrome Theme Color Tokens.
+ * Flagship Dark Theme Color Tokens (WhatsApp Pro / Obsidian Hybrid).
  *
- * Strictly adheres to the raw black palette:
- * - Main background: #000000
- * - Elevated surfaces: #0A0A0A
- * - Secondary surfaces: #111111
- * - Input backgrounds: #0D0D0D
- * - Borders: #262626
- * - Primary text: #FFFFFF
- * - Secondary text: #A3A3A3
- * - Muted text: #737373
- *
- * Strictly avoids colorful accents, gradients, colorful shadows, and excessive decoration.
+ * Designed for maximum visual comfort, zero eye glare, and premium depth:
+ * - Main background: Deep midnight obsidian (#0B1014)
+ * - Elevated surfaces: Soft slate elevation (#111A22)
+ * - Secondary surfaces: (#16222E)
+ * - Input backgrounds: (#131D27)
+ * - Borders: (#1E2D3D)
+ * - Outgoing bubbles: Rich soothing emerald-slate (#005C4B)
+ * - Incoming bubbles: Modern dark slate (#18222D)
+ * - Online indicator: Vibrant pulsing emerald (#22C55E)
+ * - Read receipts: Electric cyan-blue (#38BDF8)
+ * - Action buttons: Vibrant emerald (#00A884)
  */
 
 export const RawBlackColors = {
-  // Main background (OLED true black)
-  background: '#000000',
+  // Main background (Rich Deep Midnight Obsidian - maintains OLED battery savings with depth)
+  background: '#0B1014',
 
   // Elevated surfaces (modals, cards, elevated panels)
-  surfaceElevated: '#0A0A0A',
+  surfaceElevated: '#111A22',
 
-  // Secondary surfaces (rows, secondary containers, incoming bubbles)
-  surfaceSecondary: '#111111',
+  // Secondary surfaces (rows, secondary containers, search inputs)
+  surfaceSecondary: '#16222E',
 
   // Surface alias for components using 'surface'
-  surface: '#0A0A0A',
+  surface: '#111A22',
 
   // Input fields
-  inputBackground: '#0D0D0D',
+  inputBackground: '#131D27',
 
-  // Borders and dividers
-  border: '#262626',
-  borderSubtle: '#1A1A1A',
+  // Borders and dividers (tactile midnight slate)
+  border: '#1E2D3D',
+  borderSubtle: '#152230',
 
   // Typography hierarchy
-  text: '#FFFFFF',
-  textSecondary: '#A3A3A3',
-  textMuted: '#737373',
-  textInverse: '#000000',
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  textInverse: '#0B1014',
 
-  // Interactive buttons (Monochrome contrast)
-  buttonPrimaryBg: '#FFFFFF',
-  buttonPrimaryText: '#000000',
-  buttonPrimaryPressed: '#E5E5E5',
+  // Interactive buttons (Vibrant emerald accent)
+  buttonPrimaryBg: '#00A884',
+  buttonPrimaryText: '#FFFFFF',
+  buttonPrimaryPressed: '#008F6F',
 
-  buttonSecondaryBg: '#111111',
-  buttonSecondaryText: '#FFFFFF',
-  buttonSecondaryBorder: '#262626',
-  buttonSecondaryPressed: '#1A1A1A',
+  buttonSecondaryBg: '#16222E',
+  buttonSecondaryText: '#F1F5F9',
+  buttonSecondaryBorder: '#1E2D3D',
+  buttonSecondaryPressed: '#1D2C3B',
 
-  // Message bubbles (Monochrome contrast)
-  bubbleIncomingBg: '#111111',
-  bubbleIncomingText: '#FFFFFF',
-  bubbleIncomingBorder: '#262626',
-  bubbleIncomingTime: '#737373',
+  // Message bubbles (Flagship Dark - Zero Glare, High Comfort)
+  bubbleIncomingBg: '#18222D',
+  bubbleIncomingText: '#F1F5F9',
+  bubbleIncomingBorder: '#223141',
+  bubbleIncomingTime: '#8696A0',
 
-  bubbleOutgoingBg: '#FFFFFF',
-  bubbleOutgoingText: '#000000',
-  bubbleOutgoingTime: '#737373',
+  bubbleOutgoingBg: '#005C4B',
+  bubbleOutgoingText: '#FFFFFF',
+  bubbleOutgoingTime: '#86E3C3',
 
   // Indicators & Badges (Clean high contrast)
-  badgeBg: '#FFFFFF',
-  badgeText: '#000000',
-  onlineIndicator: '#FFFFFF',
+  badgeBg: '#00A884',
+  badgeText: '#FFFFFF',
+  onlineIndicator: '#22C55E',
+
+  // Accents & Receipts
+  accent: '#00A884',
+  accentSubtle: 'rgba(0, 168, 132, 0.15)',
+  readReceipt: '#38BDF8',
 } as const;
 
 export type ColorPalette = typeof RawBlackColors;

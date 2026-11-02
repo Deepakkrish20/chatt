@@ -179,7 +179,7 @@ export function MessageBubble({
                 typography.label,
                 {
                   fontSize: 10,
-                  color: isOutgoing ? '#525252' : colors.bubbleIncomingTime,
+                  color: isOutgoing ? colors.bubbleOutgoingTime : colors.bubbleIncomingTime,
                   marginRight: isOutgoing && !isDeleted ? 4 : 0,
                 },
               ]}
@@ -191,7 +191,7 @@ export function MessageBubble({
               <AppIcon
                 name={message.status === 'read' ? 'check-all' : 'check'}
                 size={13}
-                color={message.status === 'read' ? '#38BDF8' : '#737373'}
+                color={message.status === 'read' ? (colors.readReceipt || '#38BDF8') : colors.bubbleOutgoingTime}
               />
             ) : null}
 
@@ -201,11 +201,11 @@ export function MessageBubble({
                 hitSlop={8}
                 style={({ pressed }) => [
                   styles.optionsTrigger,
-                  { opacity: pressed ? 0.4 : 0.65, marginLeft: 6 },
+                  { opacity: pressed ? 0.4 : 0.75, marginLeft: 6 },
                 ]}
                 accessibilityLabel="Message options"
               >
-                <AppIcon name="more" size={11} color={isOutgoing ? '#525252' : colors.textSecondary} />
+                <AppIcon name="more" size={11} color={isOutgoing ? colors.bubbleOutgoingTime : colors.textSecondary} />
               </Pressable>
             ) : null}
           </View>
