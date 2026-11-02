@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 
@@ -14,7 +15,7 @@ export interface MessageComposerProps {
 export function MessageComposer({
   onSendMessage,
   onTyping,
-  placeholder = 'Encrypted message…',
+  placeholder = 'Message…',
   disabled = false,
   bottomInset = 0,
 }: MessageComposerProps) {
@@ -100,49 +101,41 @@ export function MessageComposer({
       style={[
         styles.outerContainer,
         {
-          backgroundColor: colors.background,
-          borderTopColor: colors.borderSubtle,
           paddingTop: 8,
           paddingBottom: bottomInset > 0 ? bottomInset : 10,
           paddingHorizontal: 12,
         },
       ]}
     >
-      {/* Monolithic Cyber Terminal Dock */}
-      <View
-        style={[
-          styles.monolithicDock,
-          {
-            backgroundColor: colors.surfaceElevated,
-            borderColor: canSend ? colors.buttonPrimaryBg : colors.border,
-          },
-        ]}
-      >
-        <View style={styles.dockIconBox}>
-          <AppIcon
-            name="lock"
-            size={14}
-            color={canSend ? colors.accent : colors.textMuted}
+      <View style={styles.composerRow}>
+        {/* Aurora Dark Message Input Capsule */}
+        <View
+          style={[
+            styles.inputCapsule,
+            {
+              backgroundColor: '#181822',
+              borderColor: '#2A273C',
+            },
+          ]}
+        >
+          <TextInput
+            value={text}
+            onChangeText={handleTextChange}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+            editable={!disabled}
+            multiline
+            textAlignVertical="center"
+            onKeyPress={handleKeyPress}
+            style={[
+              typography.body,
+              styles.input,
+              { color: disabled ? colors.textMuted : '#FFFFFF' },
+            ]}
           />
         </View>
 
-        <TextInput
-          value={text}
-          onChangeText={handleTextChange}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
-          editable={!disabled}
-          multiline
-          textAlignVertical="center"
-          onKeyPress={handleKeyPress}
-          style={[
-            typography.body,
-            styles.input,
-            { color: disabled ? colors.textMuted : colors.text },
-          ]}
-        />
-
-        {/* Integrated Squircle Send Button */}
+        {/* Aurora Glowing Circular Action FAB */}
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
             disabled={!canSend}
@@ -150,31 +143,27 @@ export function MessageComposer({
             onPressOut={handlePressOut}
             onPress={handleSend}
             style={({ pressed }) => [
-              styles.dockSendBtn,
-              canSend
-                ? [
-                    styles.dockSendBtnActive,
-                    {
-                      backgroundColor: colors.buttonPrimaryBg,
-                      opacity: pressed ? 0.8 : 1,
-                    },
-                  ]
-                : [
-                    styles.dockSendBtnInactive,
-                    {
-                      backgroundColor: colors.surfaceSecondary,
-                      borderColor: colors.borderSubtle,
-                    },
-                  ],
+              styles.sendFab,
+              canSend ? styles.sendFabActive : styles.sendFabInactive,
+              { opacity: pressed ? 0.85 : 1 },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Send message"
             accessibilityState={{ disabled: !canSend }}
           >
+            {canSend ? (
+              <LinearGradient
+                colors={['#A855F7', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : null}
+
             <AppIcon
               name="send"
-              size={14}
-              color={canSend ? '#FFFFFF' : colors.textMuted}
+              size={18}
+              color={canSend ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)'}
             />
           </Pressable>
         </Animated.View>
@@ -186,52 +175,51 @@ export function MessageComposer({
 const styles = StyleSheet.create({
   outerContainer: {
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(168, 85, 247, 0.15)',
     width: '100%',
+    backgroundColor: '#07070A',
   },
-  monolithicDock: {
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputCapsule: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 14,
-    minHeight: 46,
+    borderRadius: 24,
+    minHeight: 48,
     maxHeight: 120,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingVertical: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  dockIconBox: {
-    paddingHorizontal: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   input: {
     flex: 1,
     fontSize: 15,
     lineHeight: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 8,
     maxHeight: 100,
   },
-  dockSendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  sendFab: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 6,
+    overflow: 'hidden',
   },
-  dockSendBtnActive: {
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
+  sendFabActive: {
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.65,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  dockSendBtnInactive: {
-    borderWidth: StyleSheet.hairlineWidth,
+  sendFabInactive: {
+    backgroundColor: '#181822',
+    borderWidth: 1,
+    borderColor: '#2A273C',
   },
 });

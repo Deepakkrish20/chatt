@@ -60,7 +60,7 @@ export function AppTextInput({
 
   const borderColor = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [error ? '#737373' : colors.border, colors.text],
+    outputRange: [error ? '#EF4444' : colors.border, colors.accent],
   });
 
   const showClear = Boolean(value && !isPassword && onClear);

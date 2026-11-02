@@ -3,12 +3,12 @@ import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  ThemedView,
   ThemedText,
   AppTextInput,
   AppButton,
   ScreenHeader,
   AppCard,
+  AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -150,12 +150,13 @@ export default function RegisterScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title="Create Account"
           subtitle={getSubtitle()}
           showBack
+          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
           onBack={() => {
             if (step === 'set_password') {
               setStep('verify_otp');
@@ -410,7 +411,7 @@ export default function RegisterScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </ThemedView>
+    </AuroraBackground>
   );
 }
 

@@ -3,12 +3,12 @@ import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  ThemedView,
   ThemedText,
   AppTextInput,
   AppButton,
   AppIcon,
   AppCard,
+  AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -71,7 +71,7 @@ export default function WelcomeSignInScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -91,14 +91,19 @@ export default function WelcomeSignInScreen() {
                 style={[
                   styles.logoBadge,
                   {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceElevated,
-                    borderRadius: radius.md,
-                    padding: spacing.sm + 2,
+                    borderColor: 'rgba(168, 85, 247, 0.45)',
+                    backgroundColor: '#181822',
+                    borderRadius: 20,
+                    padding: spacing.md,
+                    shadowColor: '#A855F7',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 12,
+                    elevation: 6,
                   },
                 ]}
               >
-                <AppIcon name="lock" size={26} color={colors.text} />
+                <AppIcon name="lock" size={26} color="#C084FC" />
               </View>
 
               <ThemedText variant="display" style={styles.title}>
@@ -242,8 +247,8 @@ export default function WelcomeSignInScreen() {
                         styles.slotDot,
                         {
                           backgroundColor:
-                            i < capacity.activeMembers ? colors.text : 'transparent',
-                          borderColor: colors.textMuted,
+                            i < capacity.activeMembers ? '#C084FC' : 'transparent',
+                          borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
                         },
                       ]}
                     />
@@ -258,7 +263,7 @@ export default function WelcomeSignInScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </ThemedView>
+    </AuroraBackground>
   );
 }
 

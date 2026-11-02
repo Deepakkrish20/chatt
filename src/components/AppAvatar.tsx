@@ -13,11 +13,11 @@ export interface AppAvatarProps {
 }
 
 const AVATAR_PALETTES = [
-  { bg: '#172554', border: '#3B82F6', text: '#DBEAFE' }, // Deep Sapphire Cobalt
-  { bg: '#1E1B4B', border: '#818CF8', text: '#EDE9FE' }, // Midnight Indigo
-  { bg: '#2E1065', border: '#C084FC', text: '#F3E8FF' }, // Deep Amethyst
-  { bg: '#0F2838', border: '#06B6D4', text: '#CFFAFE' }, // Cyber Cyan
-  { bg: '#1E293B', border: '#64748B', text: '#F8FAFC' }, // Stealth Titanium
+  { bg: '#2E1065', border: '#C084FC', text: '#F3E8FF' }, // Deep Aurora Amethyst
+  { bg: '#1E1B4B', border: '#A855F7', text: '#EDE9FE' }, // Midnight Violet
+  { bg: '#3B0764', border: '#E879F9', text: '#FAE8FF' }, // Cosmic Magenta
+  { bg: '#1F1D36', border: '#8B5CF6', text: '#E9D5FF' }, // Obsidian Purple
+  { bg: '#181826', border: '#7C3AED', text: '#DDD6FE' }, // Stealth Aurora
 ];
 
 const getAvatarTheme = (str: string) => {
@@ -40,34 +40,47 @@ export function AppAvatar({
   const getDimensions = () => {
     switch (size) {
       case 'sm':
-        return { dimension: 34, fontStyle: typography.captionMedium, dotSize: 8 };
+        return { dimension: 36, fontStyle: typography.captionMedium, dotSize: 8 };
       case 'lg':
         return { dimension: 58, fontStyle: typography.h2, dotSize: 12 };
       case 'xl':
         return { dimension: 76, fontStyle: typography.display, dotSize: 16 };
       case 'md':
       default:
-        return { dimension: 46, fontStyle: typography.bodySemibold, dotSize: 10 };
-      }
+        return { dimension: 48, fontStyle: typography.bodySemibold, dotSize: 10 };
+    }
   };
 
   const { dimension, fontStyle, dotSize } = getDimensions();
   const initials = getInitials(name);
   const avatarTheme = getAvatarTheme(name);
-  const squircleRadius = Math.round(dimension * 0.28);
+  const radius = dimension / 2;
 
   return (
-    <View style={[{ width: dimension, height: dimension }, style]}>
+    <View
+      style={[
+        {
+          width: dimension,
+          height: dimension,
+          shadowColor: isOnline ? '#A855F7' : 'transparent',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: isOnline ? 0.7 : 0,
+          shadowRadius: 8,
+          elevation: isOnline ? 4 : 0,
+        },
+        style,
+      ]}
+    >
       <View
         style={[
           styles.container,
           {
             width: dimension,
             height: dimension,
-            borderRadius: squircleRadius,
+            borderRadius: radius,
             backgroundColor: avatarTheme.bg,
-            borderColor: avatarTheme.border,
-            borderWidth: 1,
+            borderColor: isOnline ? '#C084FC' : avatarTheme.border,
+            borderWidth: isOnline ? 2 : 1.5,
           },
         ]}
       >
@@ -85,10 +98,10 @@ export function AppAvatar({
               height: dotSize,
               borderRadius: dotSize / 2,
               backgroundColor: colors.onlineIndicator,
-              borderColor: colors.background,
+              borderColor: '#07070A',
               borderWidth: 2,
-              bottom: -1,
-              right: -1,
+              bottom: 0,
+              right: 0,
             },
           ]}
         />

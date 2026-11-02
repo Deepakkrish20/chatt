@@ -3,13 +3,13 @@ import { StyleSheet, View, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  ThemedView,
   ThemedText,
   ScreenHeader,
   AppAvatar,
   AppCard,
   AppButton,
   AppTextInput,
+  AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -64,12 +64,13 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title="Profile & Settings"
           subtitle="Closed-Circle Configuration"
           showBack
+          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
           onBack={() => router.back()}
         />
 
@@ -140,8 +141,8 @@ export default function SettingsScreen() {
                     style={[
                       styles.slotDot,
                       {
-                        backgroundColor: i < capacity.activeMembers ? colors.text : 'transparent',
-                        borderColor: colors.textMuted,
+                        backgroundColor: i < capacity.activeMembers ? '#C084FC' : 'transparent',
+                        borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
                       },
                     ]}
                   />
@@ -233,30 +234,30 @@ export default function SettingsScreen() {
           {/* Appearance Settings Section */}
           <View style={styles.section}>
             <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
-              APPEARANCE (RAW BLACK)
+              APPEARANCE (AURORA ECLIPSE)
             </ThemedText>
 
             <AppCard style={{ gap: spacing.md }}>
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
-                  <ThemedText variant="bodyMedium">Monochrome Theme</ThemedText>
+                  <ThemedText variant="bodyMedium">Aurora Eclipse Theme</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
-                    OLED True Black (#000000)
+                    Obsidian dark with fluid purple aurora accents
                   </ThemedText>
                 </View>
                 <View
                   style={[
                     styles.badgePill,
                     {
-                      backgroundColor: colors.surfaceSecondary,
-                      borderColor: colors.border,
+                      backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                      borderColor: 'rgba(168, 85, 247, 0.5)',
                       borderRadius: radius.full,
                       paddingHorizontal: spacing.sm + 2,
                       paddingVertical: spacing.xs,
                     },
                   ]}
                 >
-                  <ThemedText variant="label" tone="primary">
+                  <ThemedText variant="label" style={{ color: '#C084FC', fontWeight: '600' }}>
                     ACTIVE
                   </ThemedText>
                 </View>
@@ -266,16 +267,16 @@ export default function SettingsScreen() {
 
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
-                  <ThemedText variant="bodyMedium">High-Contrast Borders</ThemedText>
+                  <ThemedText variant="bodyMedium">Fluid Aurora Ribbon</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
-                    Defined #262626 geometric separation
+                    Breathing animated ambient lighting
                   </ThemedText>
                 </View>
                 <Switch
                   value={highContrastBorders}
                   onValueChange={setHighContrastBorders}
-                  trackColor={{ false: colors.surfaceSecondary, true: colors.text }}
-                  thumbColor={highContrastBorders ? colors.background : colors.textMuted}
+                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
             </AppCard>
@@ -298,8 +299,8 @@ export default function SettingsScreen() {
                 <Switch
                   value={readReceipts}
                   onValueChange={setReadReceipts}
-                  trackColor={{ false: colors.surfaceSecondary, true: colors.text }}
-                  thumbColor={readReceipts ? colors.background : colors.textMuted}
+                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
 
@@ -315,8 +316,8 @@ export default function SettingsScreen() {
                 <Switch
                   value={offlineNotifications}
                   onValueChange={setOfflineNotifications}
-                  trackColor={{ false: colors.surfaceSecondary, true: colors.text }}
-                  thumbColor={offlineNotifications ? colors.background : colors.textMuted}
+                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
             </AppCard>
@@ -359,7 +360,7 @@ export default function SettingsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </ThemedView>
+    </AuroraBackground>
   );
 }
 

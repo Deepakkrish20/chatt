@@ -32,6 +32,8 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
   };
 
   const hasUnread = conversation.unreadCount > 0;
+  const isTyping = conversation.lastMessageSnippet.toLowerCase().startsWith('typing');
+  const isHighlighted = hasUnread || isTyping;
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }], marginHorizontal: spacing.md, marginVertical: 4 }}>
@@ -42,12 +44,18 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
         style={({ pressed }) => [
           styles.container,
           {
-            backgroundColor: pressed ? colors.surfaceSecondary : colors.surfaceElevated,
-            borderColor: colors.borderSubtle,
+            backgroundColor: pressed
+              ? '#1E1B2E'
+              : isHighlighted
+              ? 'rgba(26, 22, 42, 0.85)'
+              : 'rgba(18, 16, 28, 0.65)',
+            borderColor: isHighlighted
+              ? 'rgba(168, 85, 247, 0.45)'
+              : 'rgba(40, 35, 60, 0.5)',
             borderWidth: 1,
-            borderRadius: 14,
+            borderRadius: 18,
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm + 4,
+            paddingVertical: spacing.md,
           },
         ]}
         accessibilityRole="button"
@@ -62,10 +70,10 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
 
         <View style={styles.content}>
           <View style={styles.topRow}>
-            <ThemedText variant="bodySemibold" numberOfLines={1} style={styles.name}>
+            <ThemedText variant="bodySemibold" numberOfLines={1} style={[styles.name, { fontSize: 16 }]}>
               {conversation.participantName}
             </ThemedText>
-            <ThemedText variant="label" tone="muted">
+            <ThemedText variant="label" tone="muted" style={{ fontSize: 12 }}>
               {conversation.lastMessageTimestamp}
             </ThemedText>
           </View>
@@ -73,11 +81,15 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
           <View style={styles.bottomRow}>
             <ThemedText
               variant="caption"
-              tone={hasUnread ? 'primary' : 'secondary'}
+              tone={isHighlighted ? 'primary' : 'secondary'}
               numberOfLines={1}
               style={[
                 styles.snippet,
-                hasUnread ? { fontWeight: '600' } : null,
+                {
+                  fontSize: 13,
+                  color: isHighlighted ? '#C084FC' : '#A1A1AA',
+                  fontWeight: isHighlighted ? '600' : '400',
+                },
               ]}
             >
               {conversation.lastMessageSnippet}
@@ -89,14 +101,19 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
                   styles.badge,
                   {
                     backgroundColor: colors.badgeBg,
-                    borderRadius: 8,
-                    paddingHorizontal: 7,
+                    borderRadius: 12,
+                    paddingHorizontal: 8,
                     paddingVertical: 2,
                     marginLeft: spacing.sm,
+                    shadowColor: '#A855F7',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.6,
+                    shadowRadius: 4,
+                    elevation: 3,
                   },
                 ]}
               >
-                <Text style={[typography.label, { color: colors.badgeText, fontSize: 10, fontWeight: '700' }]}>
+                <Text style={[typography.label, { color: '#FFFFFF', fontSize: 10, fontWeight: '700' }]}>
                   {conversation.unreadCount}
                 </Text>
               </View>

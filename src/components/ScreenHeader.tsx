@@ -8,6 +8,7 @@ import { AppIcon } from './AppIcon';
 export interface ScreenHeaderProps {
   title: string;
   subtitle?: string;
+  subtitleColor?: string;
   showBack?: boolean;
   onBack?: () => void;
   rightElement?: React.ReactNode;
@@ -17,6 +18,7 @@ export interface ScreenHeaderProps {
 export function ScreenHeader({
   title,
   subtitle,
+  subtitleColor,
   showBack = false,
   onBack,
   rightElement,
@@ -85,7 +87,12 @@ export function ScreenHeader({
             {title}
           </ThemedText>
           {Boolean(subtitle) ? (
-            <ThemedText variant="label" tone="muted" numberOfLines={1} style={{ marginTop: 2 }}>
+            <ThemedText
+              variant="label"
+              tone={subtitleColor ? undefined : 'muted'}
+              numberOfLines={1}
+              style={[{ marginTop: 2 }, subtitleColor ? { color: subtitleColor, fontWeight: '600' } : null]}
+            >
               {subtitle}
             </ThemedText>
           ) : null}

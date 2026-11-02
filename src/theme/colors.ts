@@ -1,71 +1,73 @@
 /**
- * Bespoke Cyber Obsidian & Electric Sapphire Palette (Unique Private Terminal Style).
+ * Aurora Eclipse Theme Color Tokens.
  *
- * Designed to be completely distinct from mass-market messengers (no WhatsApp green):
- * - Canvas: Cosmic Obsidian (#06070B)
- * - Surfaces: Frosted Titanium Dark (#0E121B)
- * - Outgoing Bubbles: Electric Sapphire (#1D4ED8)
- * - Incoming Bubbles: Obsidian Glass (#0E131E)
- * - Online Beacon: Neon Cyan (#00F0FF)
- * - Read Receipts: Neon Cyan (#00F0FF)
- * - Action Elements: Electric Cobalt (#2563EB)
+ * Faithfully matches the "Aurora Eclipse - Dark with fluid aurora accents" specification:
+ * - Canvas: Deep Obsidian Void (#07070A)
+ * - Elevated Surfaces: Frosted Aurora Dark (#12111A)
+ * - Outgoing Bubbles: Vibrant Aurora Violet (#7C3AED / #6D28D9)
+ * - Incoming Bubbles: Charcoal Glass (#181822)
+ * - Online Status: Soft Neon Lavender/Magenta (#C084FC)
+ * - Fluid Aurora Highlights: Glowing Violet & Neon Magenta (#A855F7, #D946EF)
+ * - Action Elements: Aurora Violet (#9333EA)
  */
 
 export const RawBlackColors = {
-  // Main background (Cosmic Obsidian - pure deep void)
-  background: '#06070B',
+  // Main background (Deep Obsidian Void)
+  background: '#07070A',
 
-  // Elevated surfaces (modals, cards, elevated terminal panels)
-  surfaceElevated: '#0E121B',
+  // Elevated surfaces (modals, cards, elevated panels)
+  surfaceElevated: '#12111A',
 
   // Secondary surfaces (rows, secondary containers, search inputs)
-  surfaceSecondary: '#131926',
+  surfaceSecondary: '#1A1826',
 
   // Surface alias for components using 'surface'
-  surface: '#0E121B',
+  surface: '#12111A',
 
-  // Input fields (recessed terminal input)
-  inputBackground: '#0A0D14',
+  // Input fields (recessed aurora input)
+  inputBackground: '#14131D',
 
-  // Borders and dividers (sharp titanium cyber-edge)
-  border: '#1B2436',
-  borderSubtle: '#111622',
+  // Borders and dividers (subtle violet-slate cyber border)
+  border: '#28233C',
+  borderSubtle: '#1B1728',
 
   // Typography hierarchy
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-  textInverse: '#06070B',
+  text: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
+  textInverse: '#07070A',
 
-  // Interactive buttons (Electric Cobalt Sapphire)
-  buttonPrimaryBg: '#2563EB',
+  // Interactive buttons (Aurora Violet)
+  buttonPrimaryBg: '#9333EA',
   buttonPrimaryText: '#FFFFFF',
-  buttonPrimaryPressed: '#1D4ED8',
+  buttonPrimaryPressed: '#7E22CE',
 
-  buttonSecondaryBg: '#131926',
-  buttonSecondaryText: '#F8FAFC',
-  buttonSecondaryBorder: '#1B2436',
-  buttonSecondaryPressed: '#1E283C',
+  buttonSecondaryBg: '#1A1826',
+  buttonSecondaryText: '#FFFFFF',
+  buttonSecondaryBorder: '#28233C',
+  buttonSecondaryPressed: '#262238',
 
-  // Message bubbles (Bespoke Luxury - Distinct from any common app)
-  bubbleIncomingBg: '#0E131E',
-  bubbleIncomingText: '#F8FAFC',
-  bubbleIncomingBorder: '#1C2638',
-  bubbleIncomingTime: '#64748B',
+  // Message bubbles (Aurora Eclipse Signature)
+  bubbleIncomingBg: '#181822',
+  bubbleIncomingText: '#FFFFFF',
+  bubbleIncomingBorder: '#252534',
+  bubbleIncomingTime: '#71717A',
 
-  bubbleOutgoingBg: '#1D4ED8',
+  bubbleOutgoingBg: '#7C3AED',
   bubbleOutgoingText: '#FFFFFF',
-  bubbleOutgoingTime: 'rgba(255, 255, 255, 0.72)',
+  bubbleOutgoingTime: 'rgba(233, 213, 255, 0.75)',
 
   // Indicators & Badges
-  badgeBg: '#2563EB',
+  badgeBg: '#9333EA',
   badgeText: '#FFFFFF',
-  onlineIndicator: '#00F0FF',
+  onlineIndicator: '#C084FC',
 
-  // Accents & Receipts (Cyber Cyan Neon)
-  accent: '#00F0FF',
-  accentSubtle: 'rgba(0, 240, 255, 0.12)',
-  readReceipt: '#00F0FF',
+  // Accents & Receipts (Fluid Aurora Neon)
+  accent: '#A855F7',
+  accentLight: '#C084FC',
+  accentNeon: '#D946EF',
+  accentSubtle: 'rgba(168, 85, 247, 0.16)',
+  readReceipt: '#D8B4FE',
 } as const;
 
 export type ColorPalette = typeof RawBlackColors;

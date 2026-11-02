@@ -104,8 +104,19 @@ export function AppButton({
 
   const textTypography = size === 'sm' ? typography.captionMedium : typography.bodyMedium;
 
+  const glowStyle: ViewStyle | null =
+    variant === 'primary' && !disabled
+      ? {
+          shadowColor: '#A855F7',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.38,
+          shadowRadius: 10,
+          elevation: 6,
+        }
+      : null;
+
   return (
-    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, glowStyle]}>
       <Pressable
         disabled={disabled || loading}
         onPressIn={handlePressIn}

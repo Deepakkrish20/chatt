@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
-  ThemedView,
   ThemedText,
   ScreenHeader,
   ConversationItem,
@@ -19,6 +18,7 @@ import {
   AppTextInput,
   AppButton,
   AppAvatar,
+  AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -228,25 +228,26 @@ export default function ChatListScreen() {
   });
 
   return (
-    <ThemedView style={styles.container}>
+    <AuroraBackground>
       <SafeAreaView style={styles.safeArea}>
         {/* Top Header with New Chat & Settings Action */}
         <ScreenHeader
           title="Chats"
           subtitle={`${capacity.activeMembers} of ${capacity.maxMembers} Members Active`}
+          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(168, 85, 247, 0.2)' }}
           rightElement={
             <View style={styles.headerActionsGroup}>
               <Pressable
                 hitSlop={10}
                 onPress={handleOpenNewChatModal}
                 style={({ pressed }) => [
-                  styles.headerAction,
-                  { opacity: pressed ? 0.6 : 1 },
+                  styles.plusFab,
+                  { opacity: pressed ? 0.8 : 1 },
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Start new conversation"
               >
-                <AppIcon name="plus" size={18} color={colors.text} />
+                <AppIcon name="plus" size={18} color="#FFFFFF" />
               </Pressable>
               <Pressable
                 hitSlop={10}
@@ -258,7 +259,7 @@ export default function ChatListScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open settings"
               >
-                <AppIcon name="settings" size={18} color={colors.text} />
+                <AppIcon name="settings" size={18} color="#C084FC" />
               </Pressable>
             </View>
           }
@@ -269,8 +270,8 @@ export default function ChatListScreen() {
           style={[
             styles.networkBar,
             {
-              backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
+              backgroundColor: 'rgba(24, 24, 34, 0.75)',
+              borderColor: 'rgba(168, 85, 247, 0.25)',
               paddingHorizontal: spacing.md,
               paddingVertical: spacing.xs + 2,
             },
@@ -287,8 +288,8 @@ export default function ChatListScreen() {
                   styles.slotDot,
                   {
                     backgroundColor:
-                      i < capacity.activeMembers ? colors.accent : 'transparent',
-                    borderColor: i < capacity.activeMembers ? colors.accent : colors.textMuted,
+                      i < capacity.activeMembers ? '#C084FC' : 'transparent',
+                    borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
                   },
                 ]}
               />
@@ -501,9 +502,9 @@ export default function ChatListScreen() {
               style={[
                 styles.modalContent,
                 {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                  borderRadius: radius.lg,
+                  backgroundColor: '#181822',
+                  borderColor: 'rgba(168, 85, 247, 0.35)',
+                  borderRadius: 20,
                   padding: spacing.lg,
                 },
               ]}
@@ -651,7 +652,7 @@ export default function ChatListScreen() {
           </View>
         </Modal>
       </SafeAreaView>
-    </ThemedView>
+    </AuroraBackground>
   );
 }
 
@@ -665,7 +666,20 @@ const styles = StyleSheet.create({
   headerActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+  },
+  plusFab: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#9333EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
   },
   headerAction: {
     width: 36,

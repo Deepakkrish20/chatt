@@ -14,13 +14,13 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
-  ThemedView,
   ThemedText,
   ScreenHeader,
   AppAvatar,
   MessageBubble,
   MessageComposer,
   AppIcon,
+  AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -499,7 +499,7 @@ export default function PrivateChatScreen() {
       : '';
 
   return (
-    <ThemedView style={styles.container}>
+    <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         {/* Contact Header */}
         <ScreenHeader
@@ -508,11 +508,13 @@ export default function PrivateChatScreen() {
             isPeerTyping
               ? 'Typing…'
               : isOnline
-              ? 'Online • Verified Peer'
-              : 'Offline • Direct Channel'
+              ? 'Online'
+              : 'Direct Channel'
           }
+          subtitleColor={isOnline ? '#C084FC' : undefined}
           showBack
           onBack={() => router.back()}
+          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
           rightElement={
             <View style={styles.headerRightGroup}>
               <Pressable
@@ -526,8 +528,8 @@ export default function PrivateChatScreen() {
                 style={({ pressed }) => [
                   styles.headerIconBtn,
                   {
-                    backgroundColor: isSearchActive ? colors.surfaceSecondary : 'transparent',
-                    borderColor: isSearchActive ? colors.border : 'transparent',
+                    backgroundColor: isSearchActive ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+                    borderColor: isSearchActive ? 'rgba(168, 85, 247, 0.4)' : 'transparent',
                     borderWidth: 1,
                     opacity: pressed ? 0.6 : 1,
                   },
@@ -538,7 +540,7 @@ export default function PrivateChatScreen() {
                 <AppIcon
                   name="search"
                   size={18}
-                  color={isSearchActive ? '#38BDF8' : colors.text}
+                  color={isSearchActive ? '#C084FC' : colors.text}
                 />
               </Pressable>
               <AppAvatar
@@ -1239,7 +1241,7 @@ export default function PrivateChatScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ThemedView>
+    </AuroraBackground>
   );
 }
 

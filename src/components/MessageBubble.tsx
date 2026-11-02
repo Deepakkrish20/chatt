@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, Platform, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
@@ -133,13 +134,17 @@ export function MessageBubble({
               paddingHorizontal: spacing.md,
               paddingTop: spacing.sm + 2,
               paddingBottom: spacing.xs + 3,
-              borderRadius: 14,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              borderBottomLeftRadius: 18,
+              borderBottomRightRadius: isOutgoing ? 4 : 18,
               opacity: pressed && (onLongPress || onDoubleTap) ? 0.8 : 1,
+              overflow: 'hidden',
             },
             isOutgoing
               ? {
                   backgroundColor: isDeleted ? colors.surfaceSecondary : colors.bubbleOutgoingBg,
-                  borderColor: isDeleted ? colors.border : '#3B82F6',
+                  borderColor: isDeleted ? colors.border : 'rgba(192, 132, 252, 0.35)',
                   borderWidth: 1,
                 }
               : {
@@ -149,6 +154,15 @@ export function MessageBubble({
                 },
           ]}
         >
+          {isOutgoing && !isDeleted ? (
+            <LinearGradient
+              colors={['#8B5CF6', '#6D28D9']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null}
+
           {isDeleted ? (
             <View style={styles.deletedContainer}>
               <AppIcon name="ban" size={13} color={colors.textMuted} />
@@ -167,7 +181,7 @@ export function MessageBubble({
               style={[
                 typography.body,
                 {
-                  color: isOutgoing ? colors.bubbleOutgoingText : colors.bubbleIncomingText,
+                  color: '#FFFFFF',
                   fontSize: 15,
                   lineHeight: 20,
                 },
@@ -183,7 +197,7 @@ export function MessageBubble({
                 typography.label,
                 {
                   fontSize: 10,
-                  color: isOutgoing ? colors.bubbleOutgoingTime : colors.bubbleIncomingTime,
+                  color: isOutgoing ? '#E9D5FF' : colors.bubbleIncomingTime,
                   marginRight: isOutgoing && !isDeleted ? 3 : 0,
                 },
               ]}
@@ -195,7 +209,7 @@ export function MessageBubble({
               <AppIcon
                 name={message.status === 'read' ? 'check-all' : 'check'}
                 size={13}
-                color={message.status === 'read' ? (colors.readReceipt || '#38BDF8') : colors.bubbleOutgoingTime}
+                color={message.status === 'read' ? '#E9D5FF' : 'rgba(233, 213, 255, 0.7)'}
               />
             ) : null}
 
@@ -209,7 +223,7 @@ export function MessageBubble({
                 ]}
                 accessibilityLabel="Message options"
               >
-                <AppIcon name="more" size={11} color={isOutgoing ? colors.bubbleOutgoingTime : colors.textSecondary} />
+                <AppIcon name="more" size={11} color={isOutgoing ? '#E9D5FF' : colors.textSecondary} />
               </Pressable>
             ) : null}
           </View>
@@ -222,8 +236,8 @@ export function MessageBubble({
             style={[
               styles.reactionBadge,
               {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
+                backgroundColor: '#181822',
+                borderColor: 'rgba(168, 85, 247, 0.45)',
                 borderRadius: radius.full,
               },
               isOutgoing ? styles.reactionBadgeRight : styles.reactionBadgeLeft,
