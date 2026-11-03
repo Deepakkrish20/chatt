@@ -118,41 +118,19 @@ export default function SettingsScreen() {
             </View>
           </AppCard>
 
-          {/* Network Constraint Information Card */}
+          {/* Network Information Card */}
           <AppCard elevated>
             <View style={styles.networkHeaderRow}>
               <ThemedText variant="label" tone="muted">
-                NETWORK CAPACITY
+                NETWORK STATUS
               </ThemedText>
               <ThemedText variant="label" tone="muted">
-                {capacity.slotsRemaining} SLOTS FREE
+                {isConfigured ? 'CONNECTED' : 'OFFLINE'}
               </ThemedText>
-            </View>
-
-            <View style={[styles.networkStatusRow, { marginTop: spacing.xs + 2 }]}>
-              <ThemedText variant="bodySemibold">
-                {capacity.activeMembers} of {capacity.maxMembers} Accounts Claimed
-              </ThemedText>
-
-              <View style={styles.slotDots}>
-                {Array.from({ length: capacity.maxMembers }).map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.slotDot,
-                      {
-                        backgroundColor: i < capacity.activeMembers ? '#C084FC' : 'transparent',
-                        borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
             </View>
 
             <ThemedText variant="caption" tone="secondary" style={{ marginTop: spacing.sm }}>
-              This private instance enforces a strict ceiling of {capacity.maxMembers} registered accounts.
-              Only direct 1:1 messaging is permitted; group chats are disabled.
+              End-to-end private direct messaging. Communication is strictly restricted to participants of each 1:1 conversation.
             </ThemedText>
           </AppCard>
 

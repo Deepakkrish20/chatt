@@ -35,7 +35,7 @@ import { DirectConversationPreview } from '@/types';
 
 export default function ChatListScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { user, capacity, refreshCapacity } = useAuth();
+  const { user, refreshCapacity } = useAuth();
 
   const currentUserId = user?.id || '';
 
@@ -233,7 +233,7 @@ export default function ChatListScreen() {
         {/* Top Header with New Chat & Settings Action */}
         <ScreenHeader
           title="Chats"
-          subtitle={`${capacity.activeMembers} of ${capacity.maxMembers} Members Active`}
+          subtitle="Direct Messages"
           style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(168, 85, 247, 0.2)' }}
           rightElement={
             <View style={styles.headerActionsGroup}>
@@ -264,38 +264,6 @@ export default function ChatListScreen() {
             </View>
           }
         />
-
-        {/* Network Slots Bar */}
-        <View
-          style={[
-            styles.networkBar,
-            {
-              backgroundColor: 'rgba(24, 24, 34, 0.75)',
-              borderColor: 'rgba(168, 85, 247, 0.25)',
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.xs + 2,
-            },
-          ]}
-        >
-          <ThemedText variant="label" tone="muted">
-            CLOSED-CIRCLE NETWORK: {capacity.slotsRemaining} SLOTS AVAILABLE
-          </ThemedText>
-          <View style={styles.slotIndicators}>
-            {Array.from({ length: capacity.maxMembers }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.slotDot,
-                  {
-                    backgroundColor:
-                      i < capacity.activeMembers ? '#C084FC' : 'transparent',
-                    borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-        </View>
 
         {/* Search Input Bar */}
         <View

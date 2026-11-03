@@ -6,6 +6,7 @@ export type IconName =
   | 'back'
   | 'settings'
   | 'lock'
+  | 'mail'
   | 'send'
   | 'search'
   | 'check'
@@ -132,6 +133,35 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 backgroundColor: 'transparent',
               }}
             />
+          </View>
+        );
+
+      case 'mail':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.76,
+                height: size * 0.54,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                borderRadius: 3,
+                overflow: 'hidden',
+                alignItems: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.48,
+                  height: size * 0.48,
+                  borderLeftWidth: 1.6,
+                  borderBottomWidth: 1.6,
+                  borderColor: iconColor,
+                  transform: [{ rotate: '-45deg' }],
+                  marginTop: -size * 0.24,
+                }}
+              />
+            </View>
           </View>
         );
 

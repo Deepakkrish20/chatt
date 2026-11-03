@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -6,6 +6,7 @@ import {
   ThemedText,
   AppTextInput,
   AppButton,
+  AppIcon,
   ScreenHeader,
   AppCard,
   AuroraBackground,
@@ -13,97 +14,74 @@ import {
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
 
-type RegistrationStep = 'email_input' | 'verify_otp' | 'set_password';
+type RegistrationView = 'form' | 'awaiting_confirmation';
 
 export default function RegisterScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { requestEmailOtp, verifyEmailOtp, setPasswordAndProfile, capacity, isConfigured } = useAuth();
+  const { signUp, signIn, resendConfirmationEmail, verifyEmailOtp, user, isLoading: isAuthLoading } = useAuth();
 
-  const [step, setStep] = useState<RegistrationStep>('email_input');
+  const [view, setView] = useState<RegistrationView>('form');
 
-  // Step 1: Email Address
-  const [email, setEmail] = useState('');
-
-  // Step 2: Verification Code
-  const [otpCode, setOtpCode] = useState('');
-
-  // Step 3: Profile & Password Setup
-  const [name, setName] = useState('');
+  // Form inputs
+  const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // UI States
+  // Fallback 6-digit code input
+  const [otpCode, setOtpCode] = useState('');
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+
+  // Status & Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // 1. Submit Email & Request OTP
-  const handleRequestOtp = async () => {
+  // If already authenticated, redirect to chats
+  useEffect(() => {
+    if (user && !isAuthLoading) {
+      router.replace('/chats');
+    }
+  }, [user, isAuthLoading]);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  // 1. Submit Registration Form
+  const handleSignUp = async () => {
     setGeneralError('');
+    setSuccessMessage('');
     const newErrors: Record<string, string> = {};
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanName = displayName.trim();
+    const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+    if (!cleanName) {
+      newErrors.displayName = 'Display Name is required';
+    }
+
+    if (!cleanUser) {
+      newErrors.username = 'Username is required';
+    } else if (cleanUser.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
+    }
+
     if (!cleanEmail) {
       newErrors.email = 'Email address is required';
     } else if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      newErrors.email = 'Enter a valid email format (e.g. name@domain.com)';
+      newErrors.email = 'Enter a valid email address';
     }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setErrors({});
-    setIsLoading(true);
-
-    const result = await requestEmailOtp(cleanEmail);
-    setIsLoading(false);
-
-    if (result.error) {
-      setGeneralError(result.error);
-    } else {
-      // Auto-suggest name and username from email prefix for Step 3
-      const suggested = cleanEmail.split('@')[0];
-      if (!name) setName(suggested.replace(/[._]/g, ' '));
-      if (!username) setUsername(suggested.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-      setStep('verify_otp');
-    }
-  };
-
-  // 2. Verify Email OTP Code
-  const handleVerifyOtp = async () => {
-    setGeneralError('');
-    const cleanOtp = otpCode.trim();
-
-    if (!cleanOtp) {
-      setErrors({ otp: 'Please enter the 6-digit code' });
-      return;
-    }
-
-    if (cleanOtp.length < 6) {
-      setErrors({ otp: 'Code must be 6 digits' });
-      return;
-    }
-
-    setErrors({});
-    setIsLoading(true);
-
-    const result = await verifyEmailOtp(email.trim(), cleanOtp);
-    setIsLoading(false);
-
-    if (result.error) {
-      setGeneralError(result.error);
-    } else {
-      setStep('set_password');
-    }
-  };
-
-  // 3. Set Password & Finalize Account
-  const handleSetPassword = async () => {
-    setGeneralError('');
-    const newErrors: Record<string, string> = {};
 
     if (!password) {
       newErrors.password = 'Password is required';
@@ -115,9 +93,6 @@ export default function RegisterScreen() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    const cleanName = name.trim() || email.split('@')[0];
-    const cleanUser = (username.trim() || cleanName).toLowerCase().replace(/[^a-z0-9_]/g, '');
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -126,8 +101,76 @@ export default function RegisterScreen() {
     setErrors({});
     setIsLoading(true);
 
-    const result = await setPasswordAndProfile(password, cleanName, cleanUser);
+    const result = await signUp(cleanEmail, password, cleanName, cleanUser);
     setIsLoading(false);
+
+    if (result.error) {
+      setGeneralError(result.error);
+    } else if (result.requiresEmailConfirmation) {
+      setView('awaiting_confirmation');
+      setResendCooldown(60);
+    } else {
+      router.replace('/chats');
+    }
+  };
+
+  // 2. "I've Confirmed" button — signs in to confirm account activation
+  const handleCheckConfirmed = async () => {
+    setGeneralError('');
+    setSuccessMessage('');
+    setIsLoading(true);
+
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await signIn(cleanEmail, password);
+    setIsLoading(false);
+
+    if (result.error) {
+      if (result.error.toLowerCase().includes('not confirmed')) {
+        setGeneralError(
+          'Email not confirmed yet. Please open the confirmation email in your Inbox or Spam folder and tap the link.'
+        );
+      } else {
+        setGeneralError(result.error);
+      }
+    } else {
+      router.replace('/chats');
+    }
+  };
+
+  // 3. Resend Confirmation Email
+  const handleResendEmail = async () => {
+    if (resendCooldown > 0 || isResending) return;
+
+    setGeneralError('');
+    setSuccessMessage('');
+    setIsResending(true);
+
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await resendConfirmationEmail(cleanEmail);
+    setIsResending(false);
+
+    if (result.error) {
+      setGeneralError(result.error);
+    } else {
+      setSuccessMessage('Confirmation email resent! Please check your Inbox and Spam folder.');
+      setResendCooldown(60);
+    }
+  };
+
+  // 4. Verify 6-digit code fallback (if user has code)
+  const handleVerifyOtp = async () => {
+    const cleanCode = otpCode.trim();
+    if (!cleanCode) {
+      setGeneralError('Please enter the 6-digit code');
+      return;
+    }
+
+    setGeneralError('');
+    setIsVerifyingCode(true);
+
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await verifyEmailOtp(cleanEmail, cleanCode);
+    setIsVerifyingCode(false);
 
     if (result.error) {
       setGeneralError(result.error);
@@ -136,32 +179,17 @@ export default function RegisterScreen() {
     }
   };
 
-  const getSubtitle = () => {
-    if (capacity.isFull) {
-      return 'Registration Closed (All 10 slots filled)';
-    }
-    if (step === 'email_input') {
-      return `Step 1 of 3: Enter Email (${capacity.activeMembers} of ${capacity.maxMembers} claimed)`;
-    }
-    if (step === 'verify_otp') {
-      return 'Step 2 of 3: Check Email for 6-Digit Code';
-    }
-    return 'Step 3 of 3: Set Master Password';
-  };
-
   return (
     <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
-          title="Create Account"
-          subtitle={getSubtitle()}
+          title={view === 'form' ? 'Create Account' : 'Confirm Email'}
+          subtitle={view === 'form' ? 'Register for Chatt' : 'Verification Sent'}
           showBack
           style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
           onBack={() => {
-            if (step === 'set_password') {
-              setStep('verify_otp');
-            } else if (step === 'verify_otp') {
-              setStep('email_input');
+            if (view === 'awaiting_confirmation') {
+              setView('form');
             } else {
               router.back();
             }
@@ -180,234 +208,288 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <AppCard style={[styles.formCard, { gap: spacing.md }]}>
-              {/* Header based on current step */}
-              {step === 'email_input' ? (
-                <>
-                  <ThemedText variant="h3">Enter Your Email</ThemedText>
-                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    We will send a 6-digit verification code directly to your email address.
-                  </ThemedText>
-                </>
-              ) : null}
-
-              {step === 'verify_otp' ? (
-                <>
-                  <ThemedText variant="h3">Check Your Inbox</ThemedText>
-                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    Enter the 6-digit code sent to <ThemedText variant="caption" tone="primary" style={{ fontWeight: '600' }}>{email}</ThemedText>.
-                  </ThemedText>
-                </>
-              ) : null}
-
-              {step === 'set_password' ? (
-                <>
-                  <ThemedText variant="h3">Set Master Password</ThemedText>
-                  <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
-                    Email verified! Choose your private master password for future logins.
-                  </ThemedText>
-                </>
-              ) : null}
-
-              {/* Full Capacity Alert */}
-              {capacity.isFull ? (
-                <View
-                  style={[
-                    styles.bannerBox,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceSecondary,
-                      borderRadius: radius.md,
-                      padding: spacing.md,
-                    },
-                  ]}
-                >
-                  <ThemedText variant="label" tone="primary" style={{ textAlign: 'center', marginBottom: 4 }}>
-                    NETWORK AT MAXIMUM CAPACITY (10/10)
-                  </ThemedText>
-                  <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
-                    All 10 private member slots have been registered. New account creation is
-                    atomically blocked by the database.
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {/* General Error Banner */}
-              {Boolean(generalError) ? (
-                <View
-                  style={[
-                    styles.bannerBox,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceSecondary,
-                      borderRadius: radius.md,
-                      padding: spacing.md,
-                    },
-                  ]}
-                >
-                  <ThemedText variant="body" tone="primary" style={{ textAlign: 'center', lineHeight: 20 }}>
-                    {generalError}
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {/* STEP 1: Email Input ONLY */}
-              {step === 'email_input' ? (
-                <>
-                  <AppTextInput
-                    label="Email Address"
-                    placeholder="e.g. yourname@gmail.com"
-                    value={email}
-                    onChangeText={(t) => {
-                      setEmail(t);
-                      if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
-                      if (generalError) setGeneralError('');
-                    }}
-                    error={errors.email}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onClear={() => setEmail('')}
-                    editable={!capacity.isFull}
-                  />
-
-                  <AppButton
-                    title={isLoading ? 'Sending Code…' : 'Send Verification Code'}
-                    onPress={handleRequestOtp}
-                    loading={isLoading}
-                    disabled={capacity.isFull || isLoading}
-                    style={{ marginTop: spacing.xs }}
-                  />
-
-                  {!isConfigured ? (
-                    <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center', marginTop: 4 }}>
-                      Requires Supabase project keys in .env to deliver real emails.
-                    </ThemedText>
-                  ) : null}
-                </>
-              ) : null}
-
-              {/* STEP 2: Enter Verification OTP */}
-              {step === 'verify_otp' ? (
-                <>
-                  <AppTextInput
-                    label="Verification Code (6 Digits)"
-                    placeholder="Enter 6-digit code"
-                    value={otpCode}
-                    onChangeText={(t) => {
-                      setOtpCode(t);
-                      if (errors.otp) setErrors((prev) => ({ ...prev, otp: '' }));
-                      if (generalError) setGeneralError('');
-                    }}
-                    error={errors.otp}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    onClear={() => setOtpCode('')}
-                  />
-
-                  <AppButton
-                    title={isLoading ? 'Verifying…' : 'Verify Code'}
-                    onPress={handleVerifyOtp}
-                    loading={isLoading}
-                    disabled={isLoading}
-                    style={{ marginTop: spacing.xs }}
-                  />
-
-                  <View style={styles.resendRow}>
-                    <Pressable
-                      onPress={handleRequestOtp}
-                      disabled={isLoading}
-                      style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-                    >
-                      <ThemedText variant="caption" tone="secondary">
-                        Didn’t receive code? Resend
-                      </ThemedText>
-                    </Pressable>
-                    <ThemedText variant="caption" tone="muted"> • </ThemedText>
-                    <Pressable
-                      onPress={() => setStep('email_input')}
-                      style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-                    >
-                      <ThemedText variant="caption" tone="secondary">
-                        Change Email
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                </>
-              ) : null}
-
-              {/* STEP 3: Set Password & Profile */}
-              {step === 'set_password' ? (
-                <>
-                  <AppTextInput
-                    label="Your Display Name"
-                    placeholder="e.g. Alex Vance"
-                    value={name}
-                    onChangeText={(t) => setName(t)}
-                    autoCapitalize="words"
-                    onClear={() => setName('')}
-                  />
-
-                  <AppTextInput
-                    label="Username"
-                    placeholder="e.g. alex_v"
-                    value={username}
-                    onChangeText={(t) => setUsername(t)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    onClear={() => setUsername('')}
-                  />
-
-                  <AppTextInput
-                    label="Create Master Password"
-                    placeholder="Minimum 6 characters"
-                    value={password}
-                    onChangeText={(t) => {
-                      setPassword(t);
-                      if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
-                    }}
-                    error={errors.password}
-                    isPassword
-                  />
-
-                  <AppTextInput
-                    label="Confirm Master Password"
-                    placeholder="Repeat master password"
-                    value={confirmPassword}
-                    onChangeText={(t) => {
-                      setConfirmPassword(t);
-                      if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: '' }));
-                    }}
-                    error={errors.confirmPassword}
-                    isPassword
-                  />
-
-                  <AppButton
-                    title={isLoading ? 'Saving Password…' : 'Set Password & Complete'}
-                    onPress={handleSetPassword}
-                    loading={isLoading}
-                    disabled={isLoading}
-                    style={{ marginTop: spacing.xs }}
-                  />
-                </>
-              ) : null}
-            </AppCard>
-
-            {/* Back to Login link */}
-            <View style={[styles.loginFooter, { marginTop: spacing.lg }]}>
-              <ThemedText variant="caption" tone="muted">
-                Already registered?{' '}
-              </ThemedText>
-              <Pressable
-                onPress={() => router.back()}
-                hitSlop={8}
-                style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-              >
-                <ThemedText variant="caption" tone="primary" style={styles.loginLink}>
-                  Sign in to private network
+            {/* VIEW 1: REGISTRATION FORM */}
+            {view === 'form' ? (
+              <AppCard style={[styles.formCard, { gap: spacing.md }]}>
+                <ThemedText variant="h3">Join Chatt</ThemedText>
+                <ThemedText variant="caption" tone="secondary" style={{ marginTop: -spacing.xs }}>
+                  Create your private profile to connect and chat in real-time.
                 </ThemedText>
-              </Pressable>
-            </View>
+
+                {/* Error Banner */}
+                {Boolean(generalError) ? (
+                  <View
+                    style={[
+                      styles.bannerBox,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceSecondary,
+                        borderRadius: radius.md,
+                        padding: spacing.md,
+                      },
+                    ]}
+                  >
+                    <ThemedText variant="body" tone="primary" style={{ textAlign: 'center', lineHeight: 20 }}>
+                      {generalError}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                <AppTextInput
+                  label="Display Name"
+                  placeholder="e.g. Alex Vance"
+                  value={displayName}
+                  onChangeText={(t) => {
+                    setDisplayName(t);
+                    if (errors.displayName) setErrors((prev) => ({ ...prev, displayName: '' }));
+                    if (!username) {
+                      setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    }
+                  }}
+                  error={errors.displayName}
+                  autoCapitalize="words"
+                  onClear={() => setDisplayName('')}
+                />
+
+                <AppTextInput
+                  label="Username"
+                  placeholder="e.g. alex_vance"
+                  value={username}
+                  onChangeText={(t) => {
+                    setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    if (errors.username) setErrors((prev) => ({ ...prev, username: '' }));
+                  }}
+                  error={errors.username}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onClear={() => setUsername('')}
+                />
+
+                <AppTextInput
+                  label="Email Address"
+                  placeholder="e.g. alex@gmail.com"
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
+                    if (generalError) setGeneralError('');
+                  }}
+                  error={errors.email}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onClear={() => setEmail('')}
+                />
+
+                <AppTextInput
+                  label="Password"
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChangeText={(t) => {
+                    setPassword(t);
+                    if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+                  }}
+                  error={errors.password}
+                  isPassword
+                />
+
+                <AppTextInput
+                  label="Confirm Password"
+                  placeholder="Repeat your password"
+                  value={confirmPassword}
+                  onChangeText={(t) => {
+                    setConfirmPassword(t);
+                    if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: '' }));
+                  }}
+                  error={errors.confirmPassword}
+                  isPassword
+                />
+
+                <AppButton
+                  title={isLoading ? 'Creating Account…' : 'Create Account'}
+                  onPress={handleSignUp}
+                  loading={isLoading}
+                  disabled={isLoading}
+                  style={{ marginTop: spacing.xs }}
+                />
+
+                {/* Back to Login */}
+                <View style={[styles.loginFooter, { marginTop: spacing.xs }]}>
+                  <ThemedText variant="caption" tone="muted">
+                    Already registered?{' '}
+                  </ThemedText>
+                  <Pressable
+                    onPress={() => router.back()}
+                    hitSlop={8}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <ThemedText variant="caption" tone="primary" style={styles.loginLink}>
+                      Sign In
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </AppCard>
+            ) : null}
+
+            {/* VIEW 2: AWAITING EMAIL CONFIRMATION */}
+            {view === 'awaiting_confirmation' ? (
+              <AppCard style={[styles.formCard, { gap: spacing.md, alignItems: 'center' }]}>
+                {/* Visual Icon */}
+                <View
+                  style={[
+                    styles.mailBadge,
+                    {
+                      borderColor: 'rgba(168, 85, 247, 0.45)',
+                      backgroundColor: '#181822',
+                      borderRadius: 24,
+                      padding: spacing.md,
+                      shadowColor: '#A855F7',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 12,
+                      elevation: 6,
+                      marginTop: spacing.xs,
+                    },
+                  ]}
+                >
+                  <AppIcon name="mail" size={32} color="#C084FC" />
+                </View>
+
+                <ThemedText variant="h3" style={{ textAlign: 'center' }}>
+                  Check Your Email
+                </ThemedText>
+
+                <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center', lineHeight: 20 }}>
+                  We sent a confirmation email to:{'\n'}
+                  <ThemedText variant="bodySemibold" tone="primary">
+                    {email}
+                  </ThemedText>
+                </ThemedText>
+
+                {/* Prominent Spam / Inbox Notice */}
+                <View
+                  style={[
+                    styles.spamNoticeCard,
+                    {
+                      borderColor: 'rgba(192, 132, 252, 0.4)',
+                      backgroundColor: 'rgba(168, 85, 247, 0.08)',
+                      borderRadius: radius.md,
+                      padding: spacing.md,
+                      width: '100%',
+                    },
+                  ]}
+                >
+                  <ThemedText variant="label" tone="primary" style={{ marginBottom: 4, fontWeight: '700' }}>
+                    📬 CHECK YOUR SPAM / JUNK FOLDER
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="secondary" style={{ lineHeight: 18 }}>
+                    Confirmation emails often land in your <ThemedText variant="caption" tone="primary" style={{ fontWeight: '600' }}>Spam</ThemedText> or <ThemedText variant="caption" tone="primary" style={{ fontWeight: '600' }}>Junk</ThemedText> section. Tap the <ThemedText variant="caption" tone="primary" style={{ fontWeight: '600' }}>Confirm email address</ThemedText> link in the message to activate your account.
+                  </ThemedText>
+                </View>
+
+                {/* Error Banner */}
+                {Boolean(generalError) ? (
+                  <View
+                    style={[
+                      styles.bannerBox,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surfaceSecondary,
+                        borderRadius: radius.md,
+                        padding: spacing.sm + 4,
+                        width: '100%',
+                      },
+                    ]}
+                  >
+                    <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
+                      {generalError}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                {/* Success Banner */}
+                {Boolean(successMessage) ? (
+                  <View
+                    style={[
+                      styles.bannerBox,
+                      {
+                        borderColor: '#22C55E',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        borderRadius: radius.md,
+                        padding: spacing.sm + 4,
+                        width: '100%',
+                      },
+                    ]}
+                  >
+                    <ThemedText variant="caption" style={{ color: '#22C55E', textAlign: 'center' }}>
+                      {successMessage}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                {/* Primary Action: I've Confirmed */}
+                <View style={{ width: '100%', marginTop: spacing.xs, gap: spacing.sm }}>
+                  <AppButton
+                    title={isLoading ? 'Verifying…' : "I've Confirmed, Sign Me In"}
+                    onPress={handleCheckConfirmed}
+                    loading={isLoading}
+                    disabled={isLoading}
+                  />
+
+                  <AppButton
+                    title={
+                      resendCooldown > 0
+                        ? `Resend Email (${resendCooldown}s)`
+                        : isResending
+                        ? 'Resending…'
+                        : 'Resend Confirmation Email'
+                    }
+                    variant="outline"
+                    onPress={handleResendEmail}
+                    disabled={resendCooldown > 0 || isResending}
+                  />
+                </View>
+
+                {/* Fallback OTP code input if received 6-digit code */}
+                <View style={[styles.codeFallbackSection, { width: '100%', marginTop: spacing.sm }]}>
+                  <ThemedText variant="label" tone="muted" style={{ textAlign: 'center', marginBottom: spacing.xs }}>
+                    OR ENTER 6-DIGIT CODE IF RECEIVED:
+                  </ThemedText>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <AppTextInput
+                        placeholder="6-digit code"
+                        value={otpCode}
+                        onChangeText={(t) => setOtpCode(t)}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+                    </View>
+                    <View style={{ width: 100 }}>
+                      <AppButton
+                        title={isVerifyingCode ? '…' : 'Verify'}
+                        variant="secondary"
+                        onPress={handleVerifyOtp}
+                        loading={isVerifyingCode}
+                        disabled={!otpCode.trim() || isVerifyingCode}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Back / Change Email */}
+                <Pressable
+                  onPress={() => setView('form')}
+                  hitSlop={8}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, marginTop: spacing.xs }]}
+                >
+                  <ThemedText variant="caption" tone="secondary">
+                    ← Change email address
+                  </ThemedText>
+                </Pressable>
+              </AppCard>
+            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -426,20 +508,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
     justifyContent: 'center',
+    flexGrow: 1,
   },
   formCard: {
     width: '100%',
   },
+  mailBadge: {
+    borderWidth: 1,
+  },
+  spamNoticeCard: {
+    borderWidth: 1,
+  },
   bannerBox: {
     borderWidth: 1,
   },
-  resendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
+  codeFallbackSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    paddingTop: 14,
   },
   loginFooter: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
@@ -32,6 +32,13 @@ interface AuthContextType {
   refreshCapacity: () => Promise<void>;
   recordActivity: () => Promise<void>;
   signIn: (identifier: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    username: string
+  ) => Promise<{ error: string | null; requiresEmailConfirmation?: boolean }>;
+  resendConfirmationEmail: (email: string) => Promise<{ error: string | null }>;
   requestEmailOtp: (email: string) => Promise<{ error: string | null }>;
   verifyEmailOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   setPasswordAndProfile: (
@@ -449,7 +456,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  // 2. Admin Create Member directly via RPC (No emails or SMTP needed)
+  // 2. Real-Time Account Registration via Email
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName: string,
+    username: string
+  ): Promise<{ error: string | null; requiresEmailConfirmation?: boolean }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = displayName.trim();
+    const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+    if (!isSupabaseConfigured) {
+      return { error: 'Supabase configuration is required for registration.' };
+    }
+
+    try {
+      const redirectUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : 'chatt://';
+
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            displayName: cleanName,
+            username: cleanUser,
+          },
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      // If email confirmation is disabled on Supabase, session is active immediately
+      if (data.session && data.user) {
+        setSession(data.session);
+        setUser(data.user);
+        await fetchProfile(data.user.id);
+        await AsyncStorage.setItem(
+          SAVED_SESSION_KEY,
+          JSON.stringify({ user: data.user, profile: null })
+        );
+        await recordActivity();
+        await refreshCapacity();
+        return { error: null, requiresEmailConfirmation: false };
+      }
+
+      // Default: Confirmation email sent to inbox/spam
+      return { error: null, requiresEmailConfirmation: true };
+    } catch (err: unknown) {
+      return {
+        error: err instanceof Error ? err.message : 'Registration failed. Please try again.',
+      };
+    }
+  };
+
+  // 3. Resend Confirmation Email
+  const resendConfirmationEmail = async (email: string): Promise<{ error: string | null }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!isSupabaseConfigured) {
+      return { error: 'Supabase configuration required.' };
+    }
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: cleanEmail,
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+      return { error: null };
+    } catch (err: unknown) {
+      return {
+        error: err instanceof Error ? err.message : 'Failed to resend confirmation email.',
+      };
+    }
+  };
+
+  // 4. Admin Create Member directly via RPC (No emails or SMTP needed)
   const adminCreateMember = async (
     username: string,
     displayName: string,
@@ -493,9 +584,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       const redirectUrl =
-        typeof window !== 'undefined' && window.location?.origin
+        Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
           ? window.location.origin
-          : 'http://localhost:8081';
+          : 'chatt://';
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: { shouldCreateUser: true, emailRedirectTo: redirectUrl },
@@ -512,15 +603,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: 'Supabase configuration required.' };
     }
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      // 1. Try signup OTP verification
+      let { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: token.trim(),
-        type: 'email',
+        type: 'signup',
       });
+
+      // 2. Fallback to general email OTP if signup type returns error
+      if (error) {
+        const fallbackRes = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: token.trim(),
+          type: 'email',
+        });
+        if (!fallbackRes.error) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+
       if (error) return { error: error.message };
-      if (data.session) {
+      if (data?.session && data?.user) {
         setSession(data.session);
         setUser(data.user);
+        await fetchProfile(data.user.id);
+        await AsyncStorage.setItem(
+          SAVED_SESSION_KEY,
+          JSON.stringify({ user: data.user, profile: null })
+        );
+        await recordActivity();
+        await refreshCapacity();
       }
       return { error: null };
     } catch (err: unknown) {
@@ -575,6 +688,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshCapacity,
         recordActivity,
         signIn,
+        signUp,
+        resendConfirmationEmail,
         requestEmailOtp,
         verifyEmailOtp,
         setPasswordAndProfile,

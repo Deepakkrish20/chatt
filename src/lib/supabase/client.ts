@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const DEFAULT_SUPABASE_URL = 'https://wxgatugyxopsznhlaodi.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =
@@ -17,24 +18,24 @@ export const isSupabaseConfigured = Boolean(
 
 /**
  * SSR-safe storage adapter for Supabase.
- * In Node.js / SSR server rendering (where window is undefined), returns null safely.
- * On browser and native mobile runtimes, delegates to AsyncStorage.
+ * In Web SSR (where window is undefined), returns null safely.
+ * On native mobile (Android APK / iOS) and active web browsers, delegates to AsyncStorage.
  */
 const SafeAsyncStorage = {
   getItem: async (key: string): Promise<string | null> => {
-    if (typeof window === 'undefined') {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
       return null;
     }
     return AsyncStorage.getItem(key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
-    if (typeof window === 'undefined') {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
       return;
     }
     return AsyncStorage.setItem(key, value);
   },
   removeItem: async (key: string): Promise<void> => {
-    if (typeof window === 'undefined') {
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
       return;
     }
     return AsyncStorage.removeItem(key);

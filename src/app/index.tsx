@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -18,19 +18,23 @@ export default function WelcomeSignInScreen() {
   const {
     user,
     signIn,
-    capacity,
+    resendConfirmationEmail,
     isConfigured,
     wasSessionExpired,
     clearSessionExpiredFlag,
     isLoading: isAuthRestoring,
   } = useAuth();
 
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [identifierError, setIdentifierError] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isEmailUnconfirmed, setIsEmailUnconfirmed] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
+  const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   // If already authenticated via restored session, skip sign-in screen
   useEffect(() => {
@@ -41,14 +45,16 @@ export default function WelcomeSignInScreen() {
 
   const handleSignIn = async () => {
     let hasError = false;
-    setIdentifierError('');
+    setEmailError('');
     setPasswordError('');
     setAuthError('');
+    setResendStatus('');
+    setIsEmailUnconfirmed(false);
     clearSessionExpiredFlag();
 
-    const cleanId = identifier.trim();
-    if (!cleanId) {
-      setIdentifierError('Member ID or Email is required');
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setEmailError('Email address is required');
       hasError = true;
     }
 
@@ -60,13 +66,32 @@ export default function WelcomeSignInScreen() {
     if (hasError) return;
 
     setIsLoading(true);
-    const result = await signIn(cleanId, password);
+    const result = await signIn(cleanEmail, password);
     setIsLoading(false);
 
     if (result.error) {
       setAuthError(result.error);
+      if (result.error.toLowerCase().includes('not confirmed')) {
+        setIsEmailUnconfirmed(true);
+      }
     } else {
       router.replace('/chats');
+    }
+  };
+
+  const handleResend = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) return;
+
+    setIsResending(true);
+    setResendStatus('');
+    const result = await resendConfirmationEmail(cleanEmail);
+    setIsResending(false);
+
+    if (result.error) {
+      setResendStatus(`Failed: ${result.error}`);
+    } else {
+      setResendStatus('Confirmation link sent! Check your Inbox and Spam folder.');
     }
   };
 
@@ -78,6 +103,7 @@ export default function WelcomeSignInScreen() {
           style={styles.keyboardView}
         >
           <ScrollView
+            ref={scrollViewRef}
             contentContainerStyle={[
               styles.scrollContent,
               { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
@@ -85,7 +111,7 @@ export default function WelcomeSignInScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Minimalist Monochrome Brand Header */}
+            {/* Brand Header */}
             <View style={styles.brandSection}>
               <View
                 style={[
@@ -111,12 +137,11 @@ export default function WelcomeSignInScreen() {
               </ThemedText>
 
               <ThemedText variant="label" tone="muted" style={styles.brandTag}>
-                CLOSED-CIRCLE 1:1 MESSENGER
+                DIRECT 1:1 MESSENGER
               </ThemedText>
 
               <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
-                Strict maximum of {capacity.maxMembers} members. Admin-provisioned,
-                direct one-to-one encrypted messaging.
+                Fast, private, end-to-end real-time communication.
               </ThemedText>
 
               {/* Status indicator pill */}
@@ -132,7 +157,7 @@ export default function WelcomeSignInScreen() {
                 ]}
               >
                 <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
-                  {isConfigured ? 'SUPABASE BACKEND CONNECTED' : 'SECURE RUNTIME ACTIVE'}
+                  {isConfigured ? 'BACKEND CONNECTED' : 'OFFLINE MODE'}
                 </ThemedText>
               </View>
             </View>
@@ -163,9 +188,10 @@ export default function WelcomeSignInScreen() {
             {/* Sign-in Form */}
             <AppCard style={[styles.formCard, { marginTop: spacing.md, gap: spacing.md }]}>
               <ThemedText variant="h3">
-                Member Sign In
+                Sign In
               </ThemedText>
 
+              {/* Error banner */}
               {Boolean(authError) ? (
                 <View
                   style={[
@@ -174,29 +200,58 @@ export default function WelcomeSignInScreen() {
                       borderColor: colors.border,
                       backgroundColor: colors.surfaceSecondary,
                       borderRadius: radius.md,
-                      padding: spacing.sm + 2,
+                      padding: spacing.sm + 4,
+                      gap: 6,
                     },
                   ]}
                 >
                   <ThemedText variant="caption" tone="primary" style={{ textAlign: 'center' }}>
                     {authError}
                   </ThemedText>
+
+                  {/* If unconfirmed, offer 1-tap resend button */}
+                  {isEmailUnconfirmed ? (
+                    <View style={{ marginTop: 4, gap: 4 }}>
+                      <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center', fontSize: 11 }}>
+                        Did you check your Spam / Junk folder?
+                      </ThemedText>
+                      <AppButton
+                        title={isResending ? 'Sending…' : 'Resend Confirmation Email'}
+                        variant="secondary"
+                        onPress={handleResend}
+                        loading={isResending}
+                        disabled={isResending}
+                      />
+                    </View>
+                  ) : null}
+
+                  {Boolean(resendStatus) ? (
+                    <ThemedText variant="caption" style={{ color: '#22C55E', textAlign: 'center', marginTop: 4 }}>
+                      {resendStatus}
+                    </ThemedText>
+                  ) : null}
                 </View>
               ) : null}
 
               <AppTextInput
-                label="Member ID / Email"
-                placeholder="e.g. janathiru0101@gmail.com or krish"
-                value={identifier}
+                label="Email Address"
+                placeholder="e.g. yourname@gmail.com"
+                value={email}
                 onChangeText={(t) => {
-                  setIdentifier(t);
-                  if (identifierError) setIdentifierError('');
+                  setEmail(t);
+                  if (emailError) setEmailError('');
                   if (authError) setAuthError('');
                 }}
-                error={identifierError}
+                error={emailError}
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                onClear={() => setIdentifier('')}
+                onClear={() => setEmail('')}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: 80, animated: true });
+                  }, 120);
+                }}
               />
 
               <AppTextInput
@@ -210,6 +265,14 @@ export default function WelcomeSignInScreen() {
                 }}
                 error={passwordError}
                 isPassword
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 100);
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 240);
+                }}
               />
 
               <View style={{ marginTop: spacing.xs, gap: spacing.sm }}>
@@ -220,14 +283,30 @@ export default function WelcomeSignInScreen() {
                   onPress={handleSignIn}
                 />
               </View>
+
+              {/* Create Account Link */}
+              <View style={[styles.createAccountRow, { marginTop: spacing.xs }]}>
+                <ThemedText variant="caption" tone="muted">
+                  Don&apos;t have an account?{' '}
+                </ThemedText>
+                <Pressable
+                  onPress={() => router.push('/register')}
+                  hitSlop={8}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <ThemedText variant="caption" tone="primary" style={styles.registerLink}>
+                    Create Account
+                  </ThemedText>
+                </Pressable>
+              </View>
             </AppCard>
 
-            {/* Privacy & Member Constraint Banner */}
+            {/* Privacy note */}
             <View
               style={[
-                styles.constraintBanner,
+                styles.infoCard,
                 {
-                  borderColor: colors.border,
+                  borderColor: 'rgba(255, 255, 255, 0.08)',
                   backgroundColor: colors.surfaceSecondary,
                   borderRadius: radius.md,
                   padding: spacing.md,
@@ -235,29 +314,8 @@ export default function WelcomeSignInScreen() {
                 },
               ]}
             >
-              <View style={styles.slotMeterRow}>
-                <ThemedText variant="label" tone="muted">
-                  REGISTERED MEMBERS: {capacity.activeMembers} / {capacity.maxMembers}
-                </ThemedText>
-                <View style={styles.slotDots}>
-                  {Array.from({ length: capacity.maxMembers }).map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.slotDot,
-                        {
-                          backgroundColor:
-                            i < capacity.activeMembers ? '#C084FC' : 'transparent',
-                          borderColor: i < capacity.activeMembers ? '#A855F7' : colors.textMuted,
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <ThemedText variant="caption" tone="secondary" style={{ marginTop: 6 }}>
-                Each member logs in with their unique Member ID and password. Direct one-to-one messages are restricted solely to the two participants.
+              <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center', lineHeight: 18 }}>
+                Chatt is a private real-time messenger. Each user verifies their account using their email address for direct one-to-one encrypted conversations.
               </ThemedText>
             </View>
           </ScrollView>
@@ -316,23 +374,17 @@ const styles = StyleSheet.create({
   bannerBox: {
     borderWidth: 1,
   },
-  constraintBanner: {
+  infoCard: {
     borderWidth: 1,
   },
-  slotMeterRow: {
+  createAccountRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
+    paddingVertical: 4,
   },
-  slotDots: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  slotDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1,
+  registerLink: {
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
 });

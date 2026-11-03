@@ -351,7 +351,7 @@ export async function fetchRegisteredMembers(
       .select('id, username, display_name, avatar_url, status')
       .neq('id', currentUserId)
       .order('display_name', { ascending: true })
-      .limit(10);
+      .limit(100);
 
     if (error || !data || data.length === 0) {
       return fallbackMembers;
@@ -798,6 +798,35 @@ export async function sendDirectMessage(
 }
 
 /**
+ * Safely creates or recreates a Supabase Realtime channel.
+ * If a channel with the given topic already exists in the client (e.g. from a prior
+ * subscription, send operation, or Fast Refresh), it unsubscribes and purges it so new
+ * callbacks (.on) can be registered cleanly without triggering:
+ * "cannot add postgres_changes callbacks for realtime:... after subscribe()."
+ */
+function getFreshChannel(channelName: string) {
+  const topic = `realtime:${channelName}`;
+  const existing = supabase.getChannels().find((c) => c.topic === topic);
+  if (existing) {
+    try {
+      existing.unsubscribe();
+      existing.teardown();
+      supabase.removeChannel(existing);
+    } catch {
+      // Ignore cleanup error
+    }
+    try {
+      (supabase as any).realtime.channels = (
+        (supabase as any).realtime?.channels || []
+      ).filter((c: any) => c.topic !== topic);
+    } catch {
+      // Ignore cleanup error
+    }
+  }
+  return supabase.channel(channelName);
+}
+
+/**
  * Subscribe to incoming real-time messages & handle auto-sync handshakes.
  */
 export function subscribeToConversationMessages(
@@ -817,8 +846,7 @@ export function subscribeToConversationMessages(
 
   const canonicalId = conversationId;
   const channelName = `room_${canonicalId}`;
-  const channel = supabase
-    .channel(channelName)
+  const channel = getFreshChannel(channelName)
     // 1. Live Incoming Message
     .on('broadcast', { event: 'new_message' }, async ({ payload }) => {
       const raw = payload as DirectMessage;
@@ -980,7 +1008,20 @@ export function subscribeToConversationMessages(
     });
 
   return () => {
-    supabase.removeChannel(channel);
+    try {
+      channel.unsubscribe();
+      channel.teardown();
+      supabase.removeChannel(channel);
+    } catch {
+      // Ignore
+    }
+    try {
+      (supabase as any).realtime.channels = (
+        (supabase as any).realtime?.channels || []
+      ).filter((c: any) => c.topic !== `realtime:${channelName}`);
+    } catch {
+      // Ignore
+    }
   };
 }
 
@@ -995,8 +1036,7 @@ export function subscribeToConversationsList(
     return () => {};
   }
 
-  const channel = supabase
-    .channel('conversations_global')
+  const channel = getFreshChannel('conversations_global')
     .on('broadcast', { event: 'new_message' }, async ({ payload }) => {
       const msg = payload as DirectMessage;
       if (msg && msg.conversationId && msg.senderId !== currentUserId) {
@@ -1027,7 +1067,20 @@ export function subscribeToConversationsList(
     .subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    try {
+      channel.unsubscribe();
+      channel.teardown();
+      supabase.removeChannel(channel);
+    } catch {
+      // Ignore
+    }
+    try {
+      (supabase as any).realtime.channels = (
+        (supabase as any).realtime?.channels || []
+      ).filter((c: any) => c.topic !== 'realtime:conversations_global');
+    } catch {
+      // Ignore
+    }
   };
 }
 
