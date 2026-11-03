@@ -419,7 +419,10 @@ export default function PrivateChatScreen() {
       setIsKeyboardVisible(true);
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 80);
+      }, 50);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 180);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
@@ -702,7 +705,7 @@ export default function PrivateChatScreen() {
 
         {/* Keyboard Avoiding Container */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardContainer}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >

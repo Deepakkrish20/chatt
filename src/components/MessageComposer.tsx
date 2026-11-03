@@ -126,6 +126,15 @@ export function MessageComposer({
             editable={!disabled}
             multiline
             textAlignVertical="center"
+            autoCorrect={true}
+            spellCheck={true}
+            autoCapitalize="sentences"
+            keyboardType="default"
+            returnKeyType="default"
+            disableFullscreenUI={true}
+            autoComplete="off"
+            textContentType="none"
+            importantForAutofill="no"
             onKeyPress={handleKeyPress}
             style={[
               typography.body,
