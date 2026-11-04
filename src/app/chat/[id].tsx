@@ -66,7 +66,7 @@ export default function PrivateChatScreen() {
 
   const conversationId = params.id || 'conv_1';
   const currentUserId = user?.id || '';
-  const { chameleonMode } = useSecurity();
+  const { chameleonMode, isPrivacyLensEnabled, togglePrivacyLens } = useSecurity();
   const isDecoy = chameleonMode === 'decoy' || conversationId.startsWith('decoy_');
 
   // Peer resolution: Ensure user NEVER sees their own profile as the peer
@@ -665,6 +665,31 @@ export default function PrivateChatScreen() {
               {!isDecoy ? (
                 <Pressable
                   hitSlop={10}
+                  onPress={async () => {
+                    await togglePrivacyLens();
+                  }}
+                  style={({ pressed }) => [
+                    styles.headerIconBtn,
+                    {
+                      backgroundColor: isPrivacyLensEnabled ? 'rgba(168, 85, 247, 0.22)' : 'transparent',
+                      borderColor: isPrivacyLensEnabled ? 'rgba(168, 85, 247, 0.45)' : 'transparent',
+                      borderWidth: 1,
+                      opacity: pressed ? 0.6 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle Privacy Lens"
+                >
+                  <AppIcon
+                    name={isPrivacyLensEnabled ? 'eye' : 'eye-off'}
+                    size={18}
+                    color={isPrivacyLensEnabled ? '#C084FC' : colors.textMuted}
+                  />
+                </Pressable>
+              ) : null}
+              {!isDecoy ? (
+                <Pressable
+                  hitSlop={10}
                   onPress={() => setIsManageConnectionModalOpen(true)}
                   style={({ pressed }) => [
                     styles.headerIconBtn,
@@ -876,6 +901,7 @@ export default function PrivateChatScreen() {
                   onLongPress={() => handleOpenMessageOptions(item)}
                   onDoubleTap={() => handleDoubleTapMessage(item)}
                   searchKeyword={isSearchActive ? searchQuery : undefined}
+                  isPrivacyLensActive={isPrivacyLensEnabled && !isDecoy}
                 />
               )}
               contentContainerStyle={[

@@ -28,6 +28,8 @@ export default function SettingsScreen() {
     configureChameleon,
     disableChameleonProtection,
     lockApp,
+    isPrivacyLensEnabled,
+    setPrivacyLens,
   } = useSecurity();
 
   const isDecoy = chameleonMode === 'decoy';
@@ -420,6 +422,23 @@ export default function SettingsScreen() {
             </ThemedText>
 
             <AppCard style={{ gap: spacing.md }}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextGroup}>
+                  <ThemedText variant="bodyMedium">Privacy Lens (Anti-Shoulder Surfing)</ThemedText>
+                  <ThemedText variant="caption" tone="secondary">
+                    Frosted veil over messages. Hold finger on bubble to reveal text.
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={isPrivacyLensEnabled}
+                  onValueChange={setPrivacyLens}
+                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
                   <ThemedText variant="bodyMedium">Read Receipts</ThemedText>

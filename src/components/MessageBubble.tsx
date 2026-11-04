@@ -11,6 +11,7 @@ export interface MessageBubbleProps {
   onLongPress?: () => void;
   onDoubleTap?: () => void;
   searchKeyword?: string;
+  isPrivacyLensActive?: boolean;
 }
 
 export function MessageBubble({
@@ -19,6 +20,7 @@ export function MessageBubble({
   onLongPress,
   onDoubleTap,
   searchKeyword,
+  isPrivacyLensActive = false,
 }: MessageBubbleProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const isOutgoing = message.isOutgoing;
@@ -28,6 +30,8 @@ export function MessageBubble({
 
   const [fadeAnim] = useState(() => new Animated.Value(animate ? 0 : 1));
   const [slideAnim] = useState(() => new Animated.Value(animate ? 8 : 0));
+  const [isRevealed, setIsRevealed] = useState(false);
+  const [revealAnim] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (animate) {
@@ -113,10 +117,31 @@ export function MessageBubble({
       <View style={{ maxWidth: '82%', position: 'relative' }}>
         <Pressable
           onPress={handlePress}
+          onPressIn={() => {
+            if (isPrivacyLensActive && !isDeleted) {
+              setIsRevealed(true);
+              Animated.timing(revealAnim, {
+                toValue: 1,
+                duration: 80,
+                useNativeDriver,
+              }).start();
+            }
+          }}
+          onPressOut={() => {
+            if (isPrivacyLensActive && !isDeleted) {
+              Animated.timing(revealAnim, {
+                toValue: 0,
+                duration: 120,
+                useNativeDriver,
+              }).start(() => {
+                setIsRevealed(false);
+              });
+            }
+          }}
           onLongPress={onLongPress}
           delayLongPress={280}
           accessibilityRole="button"
-          accessibilityHint="Double tap to react, long press or right-click to manage"
+          accessibilityHint="Double tap to react, hold to reveal message, long press to manage"
           {...(Platform.OS === 'web'
             ? ({
                 onContextMenu: (e: any) => {
@@ -177,21 +202,78 @@ export function MessageBubble({
               </Text>
             </View>
           ) : (
-            <Text
-              style={[
-                typography.body,
-                {
-                  color: '#FFFFFF',
-                  fontSize: 15,
-                  lineHeight: 20,
-                },
-              ]}
-            >
-              {renderContent()}
-            </Text>
+            <View style={{ position: 'relative' }}>
+              <Animated.Text
+                style={[
+                  typography.body,
+                  {
+                    color: '#FFFFFF',
+                    fontSize: 15,
+                    lineHeight: 20,
+                    opacity: isPrivacyLensActive
+                      ? revealAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.08, 1],
+                        })
+                      : 1,
+                    ...(isPrivacyLensActive && Platform.OS === 'web'
+                      ? ({
+                          filter: isRevealed ? 'none' : 'blur(8px)',
+                          userSelect: isRevealed ? 'text' : 'none',
+                        } as any)
+                      : {}),
+                  },
+                ]}
+              >
+                {renderContent()}
+              </Animated.Text>
+
+              {/* Frosted Privacy Lens Overlay */}
+              {isPrivacyLensActive ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    StyleSheet.absoluteFill,
+                    styles.privacyOverlay,
+                    {
+                      opacity: revealAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 0],
+                      }),
+                      backgroundColor: isOutgoing ? 'rgba(76, 29, 149, 0.88)' : 'rgba(24, 24, 34, 0.94)',
+                    },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={
+                      isOutgoing
+                        ? ['rgba(139, 92, 246, 0.4)', 'rgba(109, 40, 217, 0.6)']
+                        : ['rgba(255, 255, 255, 0.08)', 'rgba(168, 85, 247, 0.2)']
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.privacyContentRow}>
+                    <AppIcon name="eye-off" size={11} color="#E9D5FF" />
+                    <Text style={styles.privacyBadgeText}>Hold to reveal</Text>
+                  </View>
+                </Animated.View>
+              ) : null}
+            </View>
           )}
 
           <View style={styles.footer}>
+            {isPrivacyLensActive && !isDeleted ? (
+              <View style={{ marginRight: 4, opacity: 0.75 }}>
+                <AppIcon
+                  name={isRevealed ? 'eye' : 'eye-off'}
+                  size={10}
+                  color={isOutgoing ? '#E9D5FF' : colors.textMuted}
+                />
+              </View>
+            ) : null}
+
             <Text
               style={[
                 typography.label,
@@ -325,5 +407,29 @@ const styles = StyleSheet.create({
   reactionCountText: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  privacyOverlay: {
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  privacyContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+  },
+  privacyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E9D5FF',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
 });

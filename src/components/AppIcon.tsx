@@ -19,7 +19,9 @@ export type IconName =
   | 'trash'
   | 'ban'
   | 'chevron-up'
-  | 'chevron-down';
+  | 'chevron-down'
+  | 'eye'
+  | 'eye-off';
 
 export interface AppIconProps {
   name: IconName;
@@ -408,6 +410,68 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 borderColor: iconColor,
                 transform: [{ rotate: '45deg' }],
                 marginBottom: size * 0.12,
+              }}
+            />
+          </View>
+        );
+
+      case 'eye':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.78,
+                height: size * 0.46,
+                borderRadius: size * 0.23,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.24,
+                  height: size * 0.24,
+                  borderRadius: size * 0.12,
+                  backgroundColor: iconColor,
+                }}
+              />
+            </View>
+          </View>
+        );
+
+      case 'eye-off':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.78,
+                height: size * 0.46,
+                borderRadius: size * 0.23,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.22,
+                  height: size * 0.22,
+                  borderRadius: size * 0.11,
+                  backgroundColor: iconColor,
+                }}
+              />
+            </View>
+            <View
+              style={{
+                position: 'absolute',
+                width: size * 0.82,
+                height: 1.8,
+                backgroundColor: iconColor,
+                transform: [{ rotate: '-45deg' }],
+                borderRadius: 1,
               }}
             />
           </View>

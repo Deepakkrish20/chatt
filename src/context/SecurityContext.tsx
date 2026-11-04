@@ -5,17 +5,23 @@ import {
   setChameleonPins,
   disableChameleon,
   verifyChameleonPin,
-} from '@/lib/security/chameleon';
+  getPrivacyLensEnabled,
+  setPrivacyLensEnabled as persistPrivacyLens,
+  togglePrivacyLens as togglePrivacyLensEngine,
+} from '@/lib/security';
 
 interface SecurityContextType {
   isChameleonConfigured: boolean;
   isLocked: boolean;
   chameleonMode: ChameleonMode;
+  isPrivacyLensEnabled: boolean;
   unlockWithPin: (pin: string) => Promise<{ success: boolean; mode?: ChameleonMode }>;
   lockApp: () => void;
   configureChameleon: (realPin: string, decoyPin: string) => Promise<{ success: boolean; error?: string }>;
   disableChameleonProtection: () => Promise<void>;
   refreshSecurityState: () => Promise<void>;
+  setPrivacyLens: (enabled: boolean) => Promise<void>;
+  togglePrivacyLens: () => Promise<boolean>;
 }
 
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
@@ -24,11 +30,16 @@ export function SecurityProvider({ children }: { children: React.ReactNode }) {
   const [isChameleonConfigured, setIsChameleonConfigured] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [chameleonMode, setChameleonMode] = useState<ChameleonMode>('real');
+  const [isPrivacyLensEnabled, setIsPrivacyLensEnabled] = useState(true);
 
   const refreshSecurityState = useCallback(async () => {
-    const config = await getChameleonConfig();
+    const [config, privacyLens] = await Promise.all([
+      getChameleonConfig(),
+      getPrivacyLensEnabled(),
+    ]);
     const enabled = Boolean(config && config.isEnabled);
     setIsChameleonConfigured(enabled);
+    setIsPrivacyLensEnabled(privacyLens);
     if (enabled) {
       setIsLocked(true);
     } else {
@@ -39,10 +50,14 @@ export function SecurityProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-    getChameleonConfig().then((config) => {
+    Promise.all([
+      getChameleonConfig(),
+      getPrivacyLensEnabled(),
+    ]).then(([config, privacyLens]) => {
       if (isMounted) {
         const enabled = Boolean(config && config.isEnabled);
         setIsChameleonConfigured(enabled);
+        setIsPrivacyLensEnabled(privacyLens);
         if (enabled) {
           setIsLocked(true);
         }
@@ -91,17 +106,31 @@ export function SecurityProvider({ children }: { children: React.ReactNode }) {
     setChameleonMode('real');
   };
 
+  const setPrivacyLens = async (enabled: boolean) => {
+    setIsPrivacyLensEnabled(enabled);
+    await persistPrivacyLens(enabled);
+  };
+
+  const togglePrivacyLens = async (): Promise<boolean> => {
+    const next = await togglePrivacyLensEngine();
+    setIsPrivacyLensEnabled(next);
+    return next;
+  };
+
   return (
     <SecurityContext.Provider
       value={{
         isChameleonConfigured,
         isLocked,
         chameleonMode,
+        isPrivacyLensEnabled,
         unlockWithPin,
         lockApp,
         configureChameleon,
         disableChameleonProtection,
         refreshSecurityState,
+        setPrivacyLens,
+        togglePrivacyLens,
       }}
     >
       {children}
