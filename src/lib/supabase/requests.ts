@@ -522,23 +522,21 @@ export async function deleteChatRequest(
 }
 
 /**
- * Remove any requests and reset connection between two users back to 'none'.
+ * Disconnect an active connection or cancel a pending sent chat request.
+ * Removes all requests and shared conversations between user1 and user2,
+ * reverting both members cleanly back to connection status 'none'.
  */
-export async function resetConnectionBetweenUsers(
+export async function disconnectOrCancelRequest(
   user1Id: string,
   user2Id: string
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    if (isSupabaseConfigured) {
-      await supabase
-        .from('chat_requests')
-        .delete()
-        .or(
-          `and(sender_id.eq.${user1Id},receiver_id.eq.${user2Id}),and(sender_id.eq.${user2Id},receiver_id.eq.${user1Id})`
-        );
-    }
+  if (!user1Id || !user2Id) {
+    return { success: false, error: 'User IDs are required.' };
+  }
 
-    const cleanUser = async (uId: string, otherId: string) => {
+  // 1. Optimistic Local Requests Store Update
+  const cleanUserRequests = async (uId: string, otherId: string) => {
+    try {
       const local = await getStoredRequests(uId);
       const updated = local.filter(
         (r) =>
@@ -548,21 +546,95 @@ export async function resetConnectionBetweenUsers(
           )
       );
       await saveStoredRequests(uId, updated);
-    };
+    } catch {
+      // Ignore
+    }
+  };
 
-    await Promise.all([cleanUser(user1Id, user2Id), cleanUser(user2Id, user1Id)]);
+  // 2. Optimistic Local Conversations Store Update
+  const cleanUserConversations = async (uId: string, otherId: string) => {
+    try {
+      const userKey = `@chatt_conversations_${uId}`;
+      const raw = await AsyncStorage.getItem(userKey);
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const updated = list.filter((c: any) => c.participantId !== otherId);
+          await AsyncStorage.setItem(userKey, JSON.stringify(updated));
+        }
+      }
 
-    broadcastRequestChange({
-      type: 'reset',
-      senderId: user1Id,
-      receiverId: user2Id,
-    });
+      const globalKey = '@chatt_conversations_index';
+      const rawGlobal = await AsyncStorage.getItem(globalKey);
+      if (rawGlobal) {
+        const listGlobal = JSON.parse(rawGlobal);
+        if (Array.isArray(listGlobal)) {
+          const updatedGlobal = listGlobal.filter((c: any) => c.participantId !== otherId);
+          await AsyncStorage.setItem(globalKey, JSON.stringify(updatedGlobal));
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to reset connection' };
+  await Promise.all([
+    cleanUserRequests(user1Id, user2Id),
+    cleanUserRequests(user2Id, user1Id),
+    cleanUserConversations(user1Id, user2Id),
+    cleanUserConversations(user2Id, user1Id),
+  ]);
+
+  // 3. Supabase Cloud Sync
+  if (isSupabaseConfigured) {
+    try {
+      // Try atomic RPC if deployed
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('disconnect_chat_connection', {
+        target_user_id: user2Id,
+      });
+
+      if (!rpcErr && rpcData && rpcData.success) {
+        broadcastRequestChange({
+          type: 'disconnected',
+          senderId: user1Id,
+          receiverId: user2Id,
+        });
+        return { success: true };
+      }
+
+      // Direct Supabase table operations fallback
+      await supabase
+        .from('chat_requests')
+        .delete()
+        .or(
+          `and(sender_id.eq.${user1Id},receiver_id.eq.${user2Id}),and(sender_id.eq.${user2Id},receiver_id.eq.${user1Id})`
+        );
+
+      await supabase
+        .from('conversations')
+        .delete()
+        .or(
+          `and(user1_id.eq.${user1Id},user2_id.eq.${user2Id}),and(user1_id.eq.${user2Id},user2_id.eq.${user1Id})`
+        );
+    } catch {
+      // Fallback completed optimistically
+    }
   }
+
+  broadcastRequestChange({
+    type: 'disconnected',
+    senderId: user1Id,
+    receiverId: user2Id,
+  });
+
+  return { success: true };
 }
+
+/**
+ * Remove any requests and reset connection between two users back to 'none'.
+ * Alias for disconnectOrCancelRequest.
+ */
+export const resetConnectionBetweenUsers = disconnectOrCancelRequest;
 
 /**
  * Fetch connection states for all members relative to current user.

@@ -41,6 +41,8 @@ import {
   respondChatRequest,
   sendChatRequest,
   fetchUserConnectionMap,
+  disconnectOrCancelRequest,
+  subscribeToChatRequests,
   supabase,
   isSupabaseConfigured,
 } from '@/lib/supabase';
@@ -104,6 +106,9 @@ export default function PrivateChatScreen() {
   const [connectionStatus, setConnectionStatus] = useState<UserConnectionState>('none');
   const [connectionRequestId, setConnectionRequestId] = useState<string>('');
   const [isRespondingToRequest, setIsRespondingToRequest] = useState(false);
+  const [isManageConnectionModalOpen, setIsManageConnectionModalOpen] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   // Load actual peer profile if conversation is on Supabase
   useEffect(() => {
@@ -137,7 +142,7 @@ export default function PrivateChatScreen() {
     };
   }, [conversationId, currentUserId]);
 
-  // Check connection status between current user and peer
+  // Check connection status between current user and peer & subscribe in realtime
   useEffect(() => {
     let isMounted = true;
     const targetPeerId = peerUserId || inferredPeerId;
@@ -145,20 +150,29 @@ export default function PrivateChatScreen() {
       return;
     }
 
-    fetchUserConnectionMap(currentUserId).then((map) => {
-      if (!isMounted) return;
-      const conn = map[targetPeerId];
-      if (conn) {
-        setConnectionStatus(conn.status);
-        setConnectionRequestId(conn.requestId);
-      } else {
-        setConnectionStatus('none');
-        setConnectionRequestId('');
-      }
+    const checkStatus = () => {
+      fetchUserConnectionMap(currentUserId).then((map) => {
+        if (!isMounted) return;
+        const conn = map[targetPeerId];
+        if (conn) {
+          setConnectionStatus(conn.status);
+          setConnectionRequestId(conn.requestId);
+        } else {
+          setConnectionStatus('none');
+          setConnectionRequestId('');
+        }
+      });
+    };
+
+    checkStatus();
+
+    const unsub = subscribeToChatRequests(currentUserId, () => {
+      checkStatus();
     });
 
     return () => {
       isMounted = false;
+      unsub();
     };
   }, [currentUserId, peerUserId, inferredPeerId]);
 
@@ -648,6 +662,25 @@ export default function PrivateChatScreen() {
                   color={isSearchActive ? '#C084FC' : colors.text}
                 />
               </Pressable>
+              {!isDecoy ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => setIsManageConnectionModalOpen(true)}
+                  style={({ pressed }) => [
+                    styles.headerIconBtn,
+                    {
+                      backgroundColor: isManageConnectionModalOpen ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+                      borderColor: isManageConnectionModalOpen ? 'rgba(168, 85, 247, 0.4)' : 'transparent',
+                      borderWidth: 1,
+                      opacity: pressed ? 0.6 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage connection"
+                >
+                  <AppIcon name="more" size={18} color={colors.text} />
+                </Pressable>
+              ) : null}
               <AppAvatar
                 name={participantName}
                 size="sm"
@@ -934,6 +967,19 @@ export default function PrivateChatScreen() {
               <ThemedText variant="captionMedium" style={{ color: '#E9D5FF', flex: 1, marginLeft: 8 }}>
                 Request Pending: Waiting for {participantName} to accept.
               </ThemedText>
+              <AppButton
+                title="Cancel"
+                variant="outline"
+                size="sm"
+                loading={isRespondingToRequest}
+                onPress={async () => {
+                  setIsRespondingToRequest(true);
+                  const target = peerUserId || inferredPeerId;
+                  await disconnectOrCancelRequest(target, currentUserId);
+                  setConnectionStatus('none');
+                  setIsRespondingToRequest(false);
+                }}
+              />
             </View>
           ) : connectionStatus === 'pending_received' ? (
             <View
@@ -1450,6 +1496,252 @@ export default function PrivateChatScreen() {
                 </ThemedText>
               </View>
             ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Manage Connection & Relationship Modal */}
+      <Modal
+        visible={isManageConnectionModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsManageConnectionModalOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setIsManageConnectionModalOpen(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: '#181822',
+                borderColor: 'rgba(168, 85, 247, 0.4)',
+                padding: spacing.lg,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <AppAvatar name={participantName} size="md" isOnline={isOnline} />
+                <View>
+                  <ThemedText variant="bodyMedium" style={{ fontWeight: '700' }}>
+                    {participantName}
+                  </ThemedText>
+                  <ThemedText variant="caption" tone="secondary">
+                    Direct Encrypted Channel
+                  </ThemedText>
+                </View>
+              </View>
+              <Pressable
+                hitSlop={12}
+                onPress={() => setIsManageConnectionModalOpen(false)}
+                style={{ padding: 4 }}
+              >
+                <AppIcon name="close" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Status Pill */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderRadius: radius.md,
+                marginBottom: spacing.lg,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <ThemedText variant="caption" tone="secondary">
+                Connection Status:
+              </ThemedText>
+              <View
+                style={[
+                  styles.timeBadge,
+                  {
+                    backgroundColor:
+                      connectionStatus === 'accepted'
+                        ? 'rgba(34, 197, 94, 0.15)'
+                        : connectionStatus === 'pending_sent'
+                        ? 'rgba(168, 85, 247, 0.15)'
+                        : 'rgba(239, 68, 68, 0.15)',
+                    borderColor:
+                      connectionStatus === 'accepted'
+                        ? '#22C55E'
+                        : connectionStatus === 'pending_sent'
+                        ? '#A855F7'
+                        : '#EF4444',
+                    borderRadius: radius.full,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                  },
+                ]}
+              >
+                <ThemedText
+                  variant="label"
+                  style={{
+                    color:
+                      connectionStatus === 'accepted'
+                        ? '#4ADE80'
+                        : connectionStatus === 'pending_sent'
+                        ? '#C084FC'
+                        : '#FCA5A5',
+                    fontSize: 11,
+                    fontWeight: '600',
+                  }}
+                >
+                  {connectionStatus === 'accepted'
+                    ? 'Connected 🤝'
+                    : connectionStatus === 'pending_sent'
+                    ? 'Request Sent ⏳'
+                    : connectionStatus === 'pending_received'
+                    ? 'Incoming Request 📩'
+                    : 'Not Connected 🔒'}
+                </ThemedText>
+              </View>
+            </View>
+
+            {/* Action options */}
+            {connectionStatus === 'accepted' ? (
+              <View style={{ gap: spacing.sm }}>
+                <AppButton
+                  title="Disconnect Connection"
+                  variant="outline"
+                  loading={isDisconnecting}
+                  onPress={() => {
+                    setIsManageConnectionModalOpen(false);
+                    setShowDisconnectConfirm(true);
+                  }}
+                />
+                <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center', lineHeight: 16 }}>
+                  Disconnecting revokes chat permission and clears this conversation. Both members can re-connect anytime.
+                </ThemedText>
+              </View>
+            ) : connectionStatus === 'pending_sent' ? (
+              <View style={{ gap: spacing.sm }}>
+                <AppButton
+                  title="Cancel Sent Request"
+                  variant="outline"
+                  loading={isDisconnecting}
+                  onPress={async () => {
+                    setIsDisconnecting(true);
+                    const target = peerUserId || inferredPeerId;
+                    await disconnectOrCancelRequest(target, currentUserId);
+                    setConnectionStatus('none');
+                    setIsDisconnecting(false);
+                    setIsManageConnectionModalOpen(false);
+                  }}
+                />
+                <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center' }}>
+                  Withdraw your connection request to {participantName}.
+                </ThemedText>
+              </View>
+            ) : (
+              <View style={{ gap: spacing.sm }}>
+                <AppButton
+                  title="+ Send Chat Request"
+                  variant="primary"
+                  loading={isDisconnecting}
+                  onPress={async () => {
+                    setIsDisconnecting(true);
+                    const target = peerUserId || inferredPeerId;
+                    const res = await sendChatRequest(target, currentUserId);
+                    if (res.success) {
+                      setConnectionStatus('pending_sent');
+                    }
+                    setIsDisconnecting(false);
+                    setIsManageConnectionModalOpen(false);
+                  }}
+                />
+                <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center' }}>
+                  Send a permission request to connect and chat.
+                </ThemedText>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Disconnect Confirmation Alert Modal */}
+      <Modal
+        visible={showDisconnectConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDisconnectConfirm(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setShowDisconnectConfirm(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: '#181822',
+                borderColor: 'rgba(239, 68, 68, 0.4)',
+                padding: spacing.lg,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
+              <View
+                style={[
+                  styles.emptyIconBox,
+                  {
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderRadius: radius.full,
+                    marginBottom: spacing.sm,
+                  },
+                ]}
+              >
+                <AppIcon name="lock" size={24} color="#EF4444" />
+              </View>
+              <ThemedText variant="h3" style={{ textAlign: 'center' }}>
+                Disconnect Connection?
+              </ThemedText>
+              <ThemedText
+                variant="caption"
+                tone="secondary"
+                style={{ textAlign: 'center', marginTop: 6, lineHeight: 18 }}
+              >
+                Are you sure you want to disconnect from {participantName}? You will not be able to send or receive messages until a new request is sent and accepted.
+              </ThemedText>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  title="Cancel"
+                  variant="outline"
+                  disabled={isDisconnecting}
+                  onPress={() => setShowDisconnectConfirm(false)}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  title={isDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+                  variant="primary"
+                  loading={isDisconnecting}
+                  onPress={async () => {
+                    setIsDisconnecting(true);
+                    const target = peerUserId || inferredPeerId;
+                    await disconnectOrCancelRequest(target, currentUserId);
+                    setConnectionStatus('none');
+                    setIsDisconnecting(false);
+                    setShowDisconnectConfirm(false);
+                  }}
+                />
+              </View>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

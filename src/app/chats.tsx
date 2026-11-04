@@ -35,6 +35,7 @@ import {
   fetchOutgoingChatRequests,
   fetchUserConnectionMap,
   subscribeToChatRequests,
+  disconnectOrCancelRequest,
 } from '@/lib/supabase';
 import {
   ConversationParticipantProfile,
@@ -80,6 +81,10 @@ export default function ChatListScreen() {
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [modalFeedback, setModalFeedback] = useState<string>('');
+
+  // Disconnect & cancel modal states
+  const [disconnectModalPeer, setDisconnectModalPeer] = useState<ConversationParticipantProfile | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -321,6 +326,34 @@ export default function ChatListScreen() {
     await loadData();
   };
 
+  // Cancel sent request action
+  const handleCancelRequest = async (member: ConversationParticipantProfile) => {
+    if (!currentUserId || !member.id) return;
+    setActionLoadingMap((prev) => ({ ...prev, [member.id]: true }));
+    const res = await disconnectOrCancelRequest(member.id, currentUserId);
+    setActionLoadingMap((prev) => ({ ...prev, [member.id]: false }));
+    if (res.success) {
+      setModalFeedback(`Request to ${member.displayName} cancelled.`);
+      await loadData();
+    }
+  };
+
+  // Confirm disconnect action
+  const handleConfirmDisconnect = async () => {
+    if (!disconnectModalPeer || !currentUserId) return;
+    const peer = disconnectModalPeer;
+    setIsDisconnecting(true);
+    setActionLoadingMap((prev) => ({ ...prev, [peer.id]: true }));
+    const res = await disconnectOrCancelRequest(peer.id, currentUserId);
+    setIsDisconnecting(false);
+    setActionLoadingMap((prev) => ({ ...prev, [peer.id]: false }));
+    setDisconnectModalPeer(null);
+    if (res.success) {
+      setModalFeedback(`Disconnected from ${peer.displayName}.`);
+      await loadData();
+    }
+  };
+
   // Directly open chat with an accepted member
   const handleOpenChatWithMember = async (member: ConversationParticipantProfile) => {
     setIsModalOpen(false);
@@ -394,26 +427,44 @@ export default function ChatListScreen() {
 
     if (status === 'accepted') {
       return (
-        <AppButton
-          title="Chat 💬"
-          variant="primary"
-          size="sm"
-          onPress={() => handleOpenChatWithMember(member)}
-        />
+        <View style={styles.actionButtonGroup}>
+          <AppButton
+            title="Chat 💬"
+            variant="primary"
+            size="sm"
+            onPress={() => handleOpenChatWithMember(member)}
+          />
+          <AppButton
+            title="Disconnect"
+            variant="outline"
+            size="sm"
+            disabled={isLoadingAction}
+            onPress={() => setDisconnectModalPeer(member)}
+          />
+        </View>
       );
     }
 
     if (status === 'pending_sent') {
       return (
-        <View
-          style={[
-            styles.pendingBadge,
-            { borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
-          ]}
-        >
-          <ThemedText variant="captionMedium" style={{ color: '#C084FC', fontWeight: '600' }}>
-            Requested ⏳
-          </ThemedText>
+        <View style={styles.actionButtonGroup}>
+          <View
+            style={[
+              styles.pendingBadge,
+              { borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+            ]}
+          >
+            <ThemedText variant="captionMedium" style={{ color: '#C084FC', fontWeight: '600' }}>
+              Requested ⏳
+            </ThemedText>
+          </View>
+          <AppButton
+            title="Cancel"
+            variant="ghost"
+            size="sm"
+            loading={isLoadingAction}
+            onPress={() => handleCancelRequest(member)}
+          />
         </View>
       );
     }
@@ -883,18 +934,27 @@ export default function ChatListScreen() {
                               @{peer.username}
                             </ThemedText>
                           </View>
-                          <View
-                            style={[
-                              styles.pendingBadge,
-                              {
-                                borderColor: colors.border,
-                                backgroundColor: colors.surfaceElevated,
-                              },
-                            ]}
-                          >
-                            <ThemedText variant="captionMedium" style={{ color: '#C084FC' }}>
-                              Pending ⏳
-                            </ThemedText>
+                          <View style={styles.actionButtonGroup}>
+                            <View
+                              style={[
+                                styles.pendingBadge,
+                                {
+                                  borderColor: colors.border,
+                                  backgroundColor: colors.surfaceElevated,
+                                },
+                              ]}
+                            >
+                              <ThemedText variant="captionMedium" style={{ color: '#C084FC' }}>
+                                Pending ⏳
+                              </ThemedText>
+                            </View>
+                            <AppButton
+                              title="Cancel"
+                              variant="outline"
+                              size="sm"
+                              loading={Boolean(actionLoadingMap[peer.id])}
+                              onPress={() => handleCancelRequest(peer)}
+                            />
                           </View>
                         </View>
                       </View>
@@ -1043,6 +1103,73 @@ export default function ChatListScreen() {
                   }
                 />
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Disconnect Member Confirmation Modal */}
+        <Modal
+          visible={Boolean(disconnectModalPeer)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDisconnectModalPeer(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: '#181822',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  borderRadius: 20,
+                  padding: spacing.lg,
+                  maxWidth: 380,
+                },
+              ]}
+            >
+              <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
+                <View
+                  style={[
+                    styles.emptyIconContainer,
+                    {
+                      borderColor: 'rgba(239, 68, 68, 0.4)',
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                >
+                  <AppIcon name="lock" size={24} color="#EF4444" />
+                </View>
+                <ThemedText variant="h3" style={{ textAlign: 'center' }}>
+                  Disconnect Connection?
+                </ThemedText>
+                <ThemedText
+                  variant="caption"
+                  tone="secondary"
+                  style={{ textAlign: 'center', marginTop: 6, lineHeight: 18 }}
+                >
+                  Are you sure you want to disconnect from {disconnectModalPeer?.displayName}? You will revoke messaging permissions. You can connect again whenever needed.
+                </ThemedText>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <AppButton
+                    title="Cancel"
+                    variant="outline"
+                    disabled={isDisconnecting}
+                    onPress={() => setDisconnectModalPeer(null)}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppButton
+                    title={isDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+                    variant="primary"
+                    loading={isDisconnecting}
+                    onPress={handleConfirmDisconnect}
+                  />
+                </View>
+              </View>
             </View>
           </View>
         </Modal>
