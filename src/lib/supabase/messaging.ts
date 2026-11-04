@@ -162,6 +162,7 @@ async function updateConversationSummaryLocally(
 
 /**
  * Fetch all 1:1 conversations for the current user.
+ * Strictly guarantees that conversations are only returned if an accepted chat_request exists.
  */
 export async function fetchConversations(
   currentUserId: string
@@ -170,7 +171,77 @@ export async function fetchConversations(
     return [];
   }
 
-  // 1. Try Supabase cloud database if available
+  // 1. Fetch all accepted peer IDs from cloud database and local requests vault
+  const acceptedPeers = new Set<string>();
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data: acceptedReqs, error: reqsErr } = await supabase
+        .from('chat_requests')
+        .select('sender_id, receiver_id')
+        .eq('status', 'accepted')
+        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+
+      if (!reqsErr && acceptedReqs) {
+        acceptedReqs.forEach((r) => {
+          acceptedPeers.add(r.sender_id === currentUserId ? r.receiver_id : r.sender_id);
+        });
+
+        // Authoritative cloud check: if 0 accepted requests in cloud, purge local conversations & requests
+        if (acceptedReqs.length === 0) {
+          await AsyncStorage.removeItem(getConversationsStorageKey(currentUserId));
+          await AsyncStorage.removeItem(`@chatt_requests_${currentUserId}`);
+          return [];
+        }
+      } else {
+        // Fallback to local storage only if query failed
+        const rawLocal = await AsyncStorage.getItem(`@chatt_requests_${currentUserId}`);
+        if (rawLocal) {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) {
+            list.forEach((r: any) => {
+              if (r.status === 'accepted') {
+                acceptedPeers.add(r.sender_id === currentUserId ? r.receiver_id : r.sender_id);
+              }
+            });
+          }
+        }
+      }
+    } catch {
+      const rawLocal = await AsyncStorage.getItem(`@chatt_requests_${currentUserId}`);
+      if (rawLocal) {
+        const list = JSON.parse(rawLocal);
+        if (Array.isArray(list)) {
+          list.forEach((r: any) => {
+            if (r.status === 'accepted') {
+              acceptedPeers.add(r.sender_id === currentUserId ? r.receiver_id : r.sender_id);
+            }
+          });
+        }
+      }
+    }
+  } else {
+    // Offline mode
+    const rawLocal = await AsyncStorage.getItem(`@chatt_requests_${currentUserId}`);
+    if (rawLocal) {
+      const list = JSON.parse(rawLocal);
+      if (Array.isArray(list)) {
+        list.forEach((r: any) => {
+          if (r.status === 'accepted') {
+            acceptedPeers.add(r.sender_id === currentUserId ? r.receiver_id : r.sender_id);
+          }
+        });
+      }
+    }
+  }
+
+  // If user has zero accepted requests, clear any stale cached conversations and return empty
+  if (acceptedPeers.size === 0) {
+    await AsyncStorage.removeItem(getConversationsStorageKey(currentUserId));
+    return [];
+  }
+
+  // 2. Try Supabase cloud database if available
   if (isSupabaseConfigured) {
     try {
       let { data: convData, error: convError } = await supabase
@@ -180,105 +251,82 @@ export async function fetchConversations(
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (!convError && convData && convData.length > 0) {
-        const conversations = convData as DatabaseConversation[];
-        const otherParticipantIds = Array.from(
-          new Set(
-            conversations.map((c) =>
-              c.user1_id === currentUserId ? c.user2_id : c.user1_id
-            )
-          )
-        );
-
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, username, display_name, avatar_url, status')
-          .in('id', otherParticipantIds);
-
-        const profileMap = new Map<string, ConversationParticipantProfile>();
-        if (profilesData) {
-          profilesData.forEach((p) => {
-            profileMap.set(p.id, {
-              id: p.id,
-              username: p.username,
-              displayName: p.display_name,
-              avatarUrl: p.avatar_url,
-              isOnline: p.status === 'online',
-            });
-          });
-        }
-
-        const result: DirectConversationPreview[] = conversations.map((c) => {
+        const conversations = (convData as DatabaseConversation[]).filter((c) => {
           const otherId = c.user1_id === currentUserId ? c.user2_id : c.user1_id;
-          const profile = profileMap.get(otherId);
-
-          return {
-            id: c.id,
-            participantId: otherId,
-            participantName: profile?.displayName || 'Chat Partner',
-            participantUsername: profile?.username || 'member',
-            isOnline: profile?.isOnline ?? true,
-            lastMessageSnippet: c.last_message_text || 'No messages yet.',
-            lastMessageTimestamp: c.last_message_at
-              ? formatConversationTime(c.last_message_at)
-              : formatConversationTime(c.created_at),
-            unreadCount: 0,
-          };
+          return acceptedPeers.has(otherId);
         });
 
-        // Cache to user-scoped storage
-        await AsyncStorage.setItem(
-          getConversationsStorageKey(currentUserId),
-          JSON.stringify(result)
-        );
+        if (conversations.length > 0) {
+          const otherParticipantIds = Array.from(
+            new Set(
+              conversations.map((c) =>
+                c.user1_id === currentUserId ? c.user2_id : c.user1_id
+              )
+            )
+          );
 
-        return result;
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url, status')
+            .in('id', otherParticipantIds);
+
+          const profileMap = new Map<string, ConversationParticipantProfile>();
+          if (profilesData) {
+            profilesData.forEach((p) => {
+              profileMap.set(p.id, {
+                id: p.id,
+                username: p.username,
+                displayName: p.display_name,
+                avatarUrl: p.avatar_url,
+                isOnline: p.status === 'online',
+              });
+            });
+          }
+
+          const result: DirectConversationPreview[] = conversations.map((c) => {
+            const otherId = c.user1_id === currentUserId ? c.user2_id : c.user1_id;
+            const profile = profileMap.get(otherId);
+
+            return {
+              id: c.id,
+              participantId: otherId,
+              participantName: profile?.displayName || 'Chat Partner',
+              participantUsername: profile?.username || 'member',
+              isOnline: profile?.isOnline ?? true,
+              lastMessageSnippet: c.last_message_text || 'No messages yet.',
+              lastMessageTimestamp: c.last_message_at
+                ? formatConversationTime(c.last_message_at)
+                : formatConversationTime(c.created_at),
+              unreadCount: 0,
+            };
+          });
+
+          // Cache verified conversations to user-scoped storage
+          await AsyncStorage.setItem(
+            getConversationsStorageKey(currentUserId),
+            JSON.stringify(result)
+          );
+
+          return result;
+        } else {
+          // If no conversations match accepted peers, clear cached
+          await AsyncStorage.removeItem(getConversationsStorageKey(currentUserId));
+          return [];
+        }
       }
     } catch {
       // Fall through to local storage
     }
   }
 
-  // 2. Fetch from user-scoped local conversations index
+  // 3. Fetch from user-scoped local conversations index (strictly verified against accepted peers)
   try {
     const raw = await AsyncStorage.getItem(getConversationsStorageKey(currentUserId));
     if (raw) {
       const list = JSON.parse(raw) as DirectConversationPreview[];
       if (list && list.length > 0) {
-        return list;
-      }
-    }
-  } catch {
-    // Ignore
-  }
-
-  // 3. Fallback for offline/mock testing
-  const isJana = currentUserId.toLowerCase().includes('jana');
-  const peer = isJana
-    ? { id: 'user_krish', name: 'krish', username: 'krish' }
-    : { id: 'user_jana', name: 'Jana Thiru', username: 'janathiru' };
-
-  const canonicalConvId = getCanonicalConversationId('user_jana', 'user_krish');
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_MESSAGES_KEY_PREFIX + canonicalConvId);
-    if (raw) {
-      const messages = JSON.parse(raw) as DirectMessage[];
-      if (messages.length > 0) {
-        const last = messages[messages.length - 1];
-        const preview: DirectConversationPreview = {
-          id: canonicalConvId,
-          participantId: peer.id,
-          participantName: peer.name,
-          participantUsername: peer.username,
-          isOnline: true,
-          lastMessageSnippet: last.content,
-          lastMessageTimestamp: last.createdAt,
-          unreadCount: 0,
-        };
-        await AsyncStorage.setItem(
-          getConversationsStorageKey(currentUserId),
-          JSON.stringify([preview])
-        );
-        return [preview];
+        const verified = list.filter((c) => acceptedPeers.has(c.participantId));
+        return verified;
       }
     }
   } catch {
@@ -287,6 +335,7 @@ export async function fetchConversations(
 
   return [];
 }
+
 
 
 /**
@@ -695,10 +744,83 @@ export async function sendDirectMessage(
   }
 
   const canonicalId = conversationId;
+
+  // 1. Strict Permission Guard: Verify mutual chat request is accepted
+  let isAccepted = false;
+  let targetPeerId: string | undefined;
+
+  if (currentUserId) {
+    if (canonicalId.startsWith('conv_')) {
+      const clean = canonicalId.replace(/^conv_/, '');
+      const parts = clean.split('_');
+      const cleanCurrent = currentUserId.replace(/^user_/, '');
+      const match = parts.find((p) => p !== currentUserId && p !== cleanCurrent && p !== 'user_me');
+      if (match) targetPeerId = match.startsWith('user_') ? match : `user_${match}`;
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        if (!targetPeerId) {
+          const { data: conv } = await supabase
+            .from('conversations')
+            .select('user1_id, user2_id')
+            .eq('id', canonicalId)
+            .maybeSingle();
+
+          if (conv) {
+            targetPeerId = conv.user1_id === currentUserId ? conv.user2_id : conv.user1_id;
+          }
+        }
+
+        if (targetPeerId) {
+          const { data: req } = await supabase
+            .from('chat_requests')
+            .select('id')
+            .eq('status', 'accepted')
+            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetPeerId}),and(sender_id.eq.${targetPeerId},receiver_id.eq.${currentUserId})`)
+            .maybeSingle();
+
+          if (req) {
+            isAccepted = true;
+          }
+        }
+      } catch {
+        // Cloud check fallback
+      }
+    }
+
+    // Check local store ONLY if offline / Supabase is unavailable
+    if (!isAccepted && !isSupabaseConfigured && targetPeerId) {
+      try {
+        const rawLocal = await AsyncStorage.getItem(`@chatt_requests_${currentUserId}`);
+        if (rawLocal) {
+          const localList = JSON.parse(rawLocal);
+          if (Array.isArray(localList)) {
+            isAccepted = localList.some(
+              (r: any) =>
+                r.status === 'accepted' &&
+                ((r.sender_id === currentUserId && r.receiver_id === targetPeerId) ||
+                  (r.sender_id === targetPeerId && r.receiver_id === currentUserId))
+            );
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  if (!isAccepted) {
+    return {
+      data: null,
+      error: 'Cannot send message: Mutual chat request must be accepted first.',
+    };
+  }
+
   const now = Date.now();
   let messageId = `msg_${now}_${Math.random().toString(36).substring(2, 7)}`;
 
-  // 1. Push to cloud database if Supabase is configured
+  // 2. Push to cloud database if Supabase is configured
   if (isSupabaseConfigured && currentUserId) {
     try {
       const { data: dbMsg, error: dbError } = await supabase

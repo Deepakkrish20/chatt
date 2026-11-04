@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, Switch } from 'react-native';
+import { StyleSheet, View, ScrollView, Switch, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -9,15 +9,28 @@ import {
   AppCard,
   AppButton,
   AppTextInput,
+  AppIcon,
   AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
+import { useSecurity } from '@/context/SecurityContext';
+import { clearAllStoredRequests } from '@/lib/supabase/requests';
 import { ADMIN_USER } from '@/data/mockData';
+import { DECOY_USER } from '@/data/decoyData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
   const { user, profile, isAdmin, adminCreateMember, signOut, isConfigured } = useAuth();
+  const {
+    isChameleonConfigured,
+    chameleonMode,
+    configureChameleon,
+    disableChameleonProtection,
+    lockApp,
+  } = useSecurity();
+
+  const isDecoy = chameleonMode === 'decoy';
 
   // Appearance & Privacy settings UI state
   const [highContrastBorders, setHighContrastBorders] = useState(true);
@@ -32,9 +45,25 @@ export default function SettingsScreen() {
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [provisionMsg, setProvisionMsg] = useState<{ text: string; error: boolean } | null>(null);
 
-  const displayName = profile?.display_name || user?.user_metadata?.displayName || ADMIN_USER.displayName;
-  const username = profile?.username || user?.user_metadata?.username || ADMIN_USER.username;
-  const email = user?.email || ADMIN_USER.email;
+  // Chameleon Duress PIN state
+  const [isChameleonModalOpen, setIsChameleonModalOpen] = useState(false);
+  const [inputRealPin, setInputRealPin] = useState('');
+  const [inputDecoyPin, setInputDecoyPin] = useState('');
+  const [chameleonError, setChameleonError] = useState('');
+  const [isSavingChameleon, setIsSavingChameleon] = useState(false);
+  const [chameleonNotice, setChameleonNotice] = useState('');
+
+  // Reset connections state
+  const [isResettingConn, setIsResettingConn] = useState(false);
+  const [resetConnMsg, setResetConnMsg] = useState('');
+
+  const displayName = isDecoy
+    ? DECOY_USER.displayName
+    : profile?.display_name || user?.user_metadata?.displayName || ADMIN_USER.displayName;
+  const username = isDecoy
+    ? DECOY_USER.username
+    : profile?.username || user?.user_metadata?.username || ADMIN_USER.username;
+  const email = isDecoy ? DECOY_USER.email : user?.email || ADMIN_USER.email;
 
   const handleCreateMember = async () => {
     setProvisionMsg(null);
@@ -58,6 +87,46 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSaveChameleon = async () => {
+    setChameleonError('');
+    if (!inputRealPin || !inputDecoyPin) {
+      setChameleonError('Both Real PIN and Decoy PIN are required.');
+      return;
+    }
+    setIsSavingChameleon(true);
+    const res = await configureChameleon(inputRealPin, inputDecoyPin);
+    setIsSavingChameleon(false);
+    if (!res.success) {
+      setChameleonError(res.error || 'Failed to save Chameleon PINs.');
+    } else {
+      setIsChameleonModalOpen(false);
+      setInputRealPin('');
+      setInputDecoyPin('');
+      setChameleonNotice('Chameleon Duress Vault successfully configured & armed!');
+      setTimeout(() => setChameleonNotice(''), 4000);
+    }
+  };
+
+  const handleDisableChameleon = async () => {
+    await disableChameleonProtection();
+    setChameleonNotice('Chameleon Vault disabled.');
+    setTimeout(() => setChameleonNotice(''), 3000);
+  };
+
+  const handleResetConnections = async () => {
+    setIsResettingConn(true);
+    setResetConnMsg('');
+    try {
+      await clearAllStoredRequests(user?.id);
+      setResetConnMsg('Chat requests cache cleared! Members can now connect from scratch.');
+      setTimeout(() => setResetConnMsg(''), 4000);
+    } catch {
+      setResetConnMsg('Failed to reset requests cache.');
+    } finally {
+      setIsResettingConn(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.replace('/');
@@ -67,8 +136,8 @@ export default function SettingsScreen() {
     <AuroraBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
-          title="Profile & Settings"
-          subtitle="Closed-Circle Configuration"
+          title={isDecoy ? 'Account Settings' : 'Profile & Settings'}
+          subtitle={isDecoy ? 'Preferences' : 'Closed-Circle Configuration'}
           showBack
           style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
           onBack={() => router.back()}
@@ -111,40 +180,124 @@ export default function SettingsScreen() {
                   ]}
                 >
                   <ThemedText variant="label" tone="primary" style={{ fontSize: 10 }}>
-                    {isConfigured ? 'AUTHENTICATED MEMBER • VERIFIED' : 'DEMO MEMBER • LOCAL ACTIVE'}
+                    {isDecoy
+                      ? 'PERSONAL PROFILE • ACTIVE'
+                      : isConfigured
+                      ? 'AUTHENTICATED MEMBER • VERIFIED'
+                      : 'DEMO MEMBER • LOCAL ACTIVE'}
                   </ThemedText>
                 </View>
               </View>
             </View>
           </AppCard>
 
-          {/* Network Information Card */}
-          <AppCard elevated>
-            <View style={styles.networkHeaderRow}>
-              <ThemedText variant="label" tone="muted">
-                NETWORK STATUS
+          {/* Chameleon Duress Section (Hidden in Decoy Mode) */}
+          {!isDecoy ? (
+            <View style={styles.section}>
+              <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
+                CHAMELEON DURESS PIN (DECOY VAULT)
               </ThemedText>
-              <ThemedText variant="label" tone="muted">
-                {isConfigured ? 'CONNECTED' : 'OFFLINE'}
-              </ThemedText>
+
+              <AppCard style={{ gap: spacing.sm + 2 }}>
+                <View style={styles.settingRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <ThemedText variant="bodySemibold">Chameleon Duress Vault</ThemedText>
+                    <ThemedText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
+                      Set a Real PIN to open your 10-member circle, and a Decoy PIN to open a harmless fake messenger if forced to unlock.
+                    </ThemedText>
+                  </View>
+                  <View
+                    style={[
+                      styles.badgePill,
+                      {
+                        backgroundColor: isChameleonConfigured
+                          ? 'rgba(34, 197, 94, 0.15)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: isChameleonConfigured
+                          ? 'rgba(34, 197, 94, 0.4)'
+                          : colors.border,
+                        borderRadius: radius.full,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: 3,
+                      },
+                    ]}
+                  >
+                    <ThemedText
+                      variant="label"
+                      style={{
+                        color: isChameleonConfigured ? '#4ADE80' : colors.textMuted,
+                        fontSize: 10,
+                      }}
+                    >
+                      {isChameleonConfigured ? 'ARMED' : 'DISABLED'}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                {Boolean(chameleonNotice) ? (
+                  <View
+                    style={[
+                      styles.msgBanner,
+                      {
+                        backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                        borderColor: 'rgba(168, 85, 247, 0.4)',
+                        borderRadius: radius.sm,
+                        padding: spacing.sm,
+                      },
+                    ]}
+                  >
+                    <ThemedText variant="caption" style={{ color: '#E9D5FF', textAlign: 'center' }}>
+                      {chameleonNotice}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {isChameleonConfigured ? (
+                    <>
+                      <AppButton
+                        title="Lock Vault Now"
+                        variant="primary"
+                        size="sm"
+                        style={{ flex: 1 }}
+                        onPress={() => lockApp()}
+                      />
+                      <AppButton
+                        title="Change"
+                        variant="outline"
+                        size="sm"
+                        onPress={() => setIsChameleonModalOpen(true)}
+                      />
+                      <AppButton
+                        title="Disable"
+                        variant="ghost"
+                        size="sm"
+                        onPress={handleDisableChameleon}
+                      />
+                    </>
+                  ) : (
+                    <AppButton
+                      title="Setup Chameleon PINs"
+                      variant="primary"
+                      size="sm"
+                      style={{ flex: 1 }}
+                      onPress={() => setIsChameleonModalOpen(true)}
+                    />
+                  )}
+                </View>
+              </AppCard>
             </View>
+          ) : null}
 
-            <ThemedText variant="caption" tone="secondary" style={{ marginTop: spacing.sm }}>
-              End-to-end private direct messaging. Communication is strictly restricted to participants of each 1:1 conversation.
-            </ThemedText>
-          </AppCard>
-
-          {/* Admin Member Provisioning Section */}
-          {Boolean(isAdmin) ? (
+          {/* Admin Member Provisioning Section (Hidden in Decoy Mode) */}
+          {!isDecoy && Boolean(isAdmin) ? (
             <View style={styles.section}>
               <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
                 ADMIN CONTROLS: PROVISION NEW MEMBER
               </ThemedText>
 
               <AppCard style={{ gap: spacing.sm + 2 }}>
-                <ThemedText variant="bodySemibold">
-                  Create Member Account
-                </ThemedText>
+                <ThemedText variant="bodySemibold">Create Member Account</ThemedText>
                 <ThemedText variant="caption" tone="secondary" style={{ marginTop: -4 }}>
                   Provision credentials directly. Members log in instantly without email confirmation.
                 </ThemedText>
@@ -298,6 +451,37 @@ export default function SettingsScreen() {
                   thumbColor="#FFFFFF"
                 />
               </View>
+
+              {!isDecoy ? (
+                <>
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                  <View style={styles.settingRow}>
+                    <View style={{ flex: 1, marginRight: spacing.sm }}>
+                      <ThemedText variant="bodyMedium">Reset Chat Requests</ThemedText>
+                      <ThemedText variant="caption" tone="secondary">
+                        Clear local request cache to re-connect members from first
+                      </ThemedText>
+                    </View>
+                    <AppButton
+                      title="Reset"
+                      variant="outline"
+                      size="sm"
+                      loading={isResettingConn}
+                      onPress={handleResetConnections}
+                    />
+                  </View>
+
+                  {Boolean(resetConnMsg) ? (
+                    <ThemedText
+                      variant="caption"
+                      style={{ color: '#4ADE80', textAlign: 'center', marginTop: 4 }}
+                    >
+                      {resetConnMsg}
+                    </ThemedText>
+                  ) : null}
+                </>
+              ) : null}
             </AppCard>
           </View>
 
@@ -330,13 +514,113 @@ export default function SettingsScreen() {
               </AppCard>
             ) : (
               <AppButton
-                title="Sign Out (Return to Welcome)"
-                variant="secondary"
-                onPress={() => setShowSignOutPrompt(true)}
+                title={isDecoy ? 'Lock App' : 'Sign Out'}
+                variant="outline"
+                onPress={() => {
+                  if (isDecoy) {
+                    lockApp();
+                  } else {
+                    setShowSignOutPrompt(true);
+                  }
+                }}
               />
             )}
           </View>
         </ScrollView>
+
+        {/* Chameleon PIN Setup Modal */}
+        <Modal
+          visible={isChameleonModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsChameleonModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: '#181822',
+                  borderColor: 'rgba(168, 85, 247, 0.4)',
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <View>
+                  <ThemedText variant="h3">Chameleon Duress Vault</ThemedText>
+                  <ThemedText variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                    Setup Real PIN & Decoy PIN
+                  </ThemedText>
+                </View>
+                <Pressable
+                  hitSlop={12}
+                  onPress={() => setIsChameleonModalOpen(false)}
+                  style={({ pressed }) => [
+                    styles.modalCloseBtn,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSecondary,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <AppIcon name="close" size={16} color={colors.text} />
+                </Pressable>
+              </View>
+
+              {Boolean(chameleonError) ? (
+                <View
+                  style={[
+                    styles.msgBanner,
+                    {
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      borderColor: 'rgba(239, 68, 68, 0.4)',
+                      borderRadius: radius.sm,
+                      padding: spacing.sm,
+                      marginBottom: spacing.sm,
+                    },
+                  ]}
+                >
+                  <ThemedText variant="caption" style={{ color: '#FCA5A5', textAlign: 'center' }}>
+                    {chameleonError}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              <ThemedText variant="caption" tone="secondary" style={{ marginBottom: spacing.md }}>
+                • <ThemedText variant="captionMedium" style={{ color: '#A855F7' }}>Real PIN</ThemedText>: Opens your authentic 10-member confidential circle.{'\n'}
+                • <ThemedText variant="captionMedium" style={{ color: '#38BDF8' }}>Decoy PIN</ThemedText>: Opens harmless fake chats if forced to unlock.
+              </ThemedText>
+
+              <AppTextInput
+                label="Real Access PIN (4 digits)"
+                placeholder="e.g. 1234"
+                value={inputRealPin}
+                onChangeText={(t) => setInputRealPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                keyboardType="numeric"
+                isPassword
+                containerStyle={{ marginBottom: spacing.sm }}
+              />
+
+              <AppTextInput
+                label="Decoy PIN (4 digits - MUST be different)"
+                placeholder="e.g. 9999"
+                value={inputDecoyPin}
+                onChangeText={(t) => setInputDecoyPin(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                keyboardType="numeric"
+                isPassword
+                containerStyle={{ marginBottom: spacing.lg }}
+              />
+
+              <AppButton
+                title={isSavingChameleon ? 'Arming Vault…' : 'Arm Chameleon Vault'}
+                variant="primary"
+                loading={isSavingChameleon}
+                onPress={handleSaveChameleon}
+              />
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </AuroraBackground>
   );
@@ -350,9 +634,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    maxWidth: 600,
-    width: '100%',
-    alignSelf: 'center',
+    flexGrow: 1,
   },
   profileCard: {
     width: '100%',
@@ -370,26 +652,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
-  },
-  networkHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  networkStatusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  slotDots: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  slotDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1,
   },
   section: {
     width: '100%',
@@ -412,5 +674,33 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     width: '100%',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -25,6 +25,8 @@ import {
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
+import { useSecurity } from '@/context/SecurityContext';
+import { DECOY_MESSAGES } from '@/data/decoyData';
 import {
   fetchMessages,
   sendDirectMessage,
@@ -62,6 +64,8 @@ export default function PrivateChatScreen() {
 
   const conversationId = params.id || 'conv_1';
   const currentUserId = user?.id || '';
+  const { chameleonMode } = useSecurity();
+  const isDecoy = chameleonMode === 'decoy' || conversationId.startsWith('decoy_');
 
   // Peer resolution: Ensure user NEVER sees their own profile as the peer
   const myNames = [
@@ -82,8 +86,22 @@ export default function PrivateChatScreen() {
     isParamMyOwnName || !params.name ? defaultPeerName : params.name
   );
   const [isOnline, setIsOnline] = useState(params.online === 'true');
-  const [peerUserId, setPeerUserId] = useState<string>(params.participantId || '');
-  const [connectionStatus, setConnectionStatus] = useState<UserConnectionState>('accepted');
+
+  // Inferred peer ID if opened via canonical ID
+  const inferredPeerId = useMemo(() => {
+    if (params.participantId) return params.participantId;
+    if (conversationId.startsWith('conv_')) {
+      const clean = conversationId.replace(/^conv_/, '');
+      const parts = clean.split('_');
+      const cleanCurrent = currentUserId.replace(/^user_/, '');
+      const match = parts.find((p) => p !== currentUserId && p !== cleanCurrent && p !== 'user_me');
+      if (match) return match.startsWith('user_') ? match : `user_${match}`;
+    }
+    return '';
+  }, [params.participantId, conversationId, currentUserId]);
+
+  const [peerUserId, setPeerUserId] = useState<string>(inferredPeerId);
+  const [connectionStatus, setConnectionStatus] = useState<UserConnectionState>('none');
   const [connectionRequestId, setConnectionRequestId] = useState<string>('');
   const [isRespondingToRequest, setIsRespondingToRequest] = useState(false);
 
@@ -122,23 +140,27 @@ export default function PrivateChatScreen() {
   // Check connection status between current user and peer
   useEffect(() => {
     let isMounted = true;
-    if (!currentUserId || !peerUserId) return;
+    const targetPeerId = peerUserId || inferredPeerId;
+    if (!currentUserId || !targetPeerId) {
+      return;
+    }
 
     fetchUserConnectionMap(currentUserId).then((map) => {
       if (!isMounted) return;
-      const conn = map[peerUserId];
+      const conn = map[targetPeerId];
       if (conn) {
         setConnectionStatus(conn.status);
         setConnectionRequestId(conn.requestId);
       } else {
-        setConnectionStatus('accepted');
+        setConnectionStatus('none');
+        setConnectionRequestId('');
       }
     });
 
     return () => {
       isMounted = false;
     };
-  }, [currentUserId, peerUserId]);
+  }, [currentUserId, peerUserId, inferredPeerId]);
 
 
   // Resolve real conversation UUID if opened with stale 'conv_*' parameter
@@ -248,6 +270,19 @@ export default function PrivateChatScreen() {
   useEffect(() => {
     let isMounted = true;
 
+    if (isDecoy) {
+      const decoyTimer = setTimeout(() => {
+        if (isMounted) {
+          setMessages(DECOY_MESSAGES[conversationId] || []);
+          setIsLoading(false);
+        }
+      }, 0);
+      return () => {
+        isMounted = false;
+        clearTimeout(decoyTimer);
+      };
+    }
+
     fetchMessages(conversationId, currentUserId, participantName).then((history) => {
       if (isMounted) {
         setMessages(history);
@@ -329,7 +364,7 @@ export default function PrivateChatScreen() {
       sendTypingStatus(conversationId, currentUserId, false);
       unsubscribe();
     };
-  }, [conversationId, currentUserId, participantName]);
+  }, [conversationId, currentUserId, participantName, isDecoy]);
 
   const handleUserTyping = (isTyping: boolean) => {
     sendTypingStatus(conversationId, currentUserId, isTyping);
@@ -473,6 +508,36 @@ export default function PrivateChatScreen() {
 
   const handleSendMessage = async (content: string) => {
     if (isSending || !content.trim()) return;
+
+    if (isDecoy) {
+      const tempId = `temp_${Date.now()}`;
+      const optimisticMsg: DirectMessage = {
+        id: tempId,
+        conversationId,
+        senderId: currentUserId || 'decoy_user_01',
+        senderName: 'You',
+        content: content.trim(),
+        createdAt: 'Just now',
+        isOutgoing: true,
+        status: 'read',
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+
+      setTimeout(() => {
+        const autoReply: DirectMessage = {
+          id: `rep_${Date.now()}`,
+          conversationId,
+          senderId: 'decoy_peer',
+          senderName: participantName,
+          content: 'Got it, thanks!',
+          createdAt: 'Just now',
+          isOutgoing: false,
+          status: 'read',
+        };
+        setMessages((prev) => [...prev, autoReply]);
+      }, 1200);
+      return;
+    }
 
     if (connectionStatus !== 'accepted') {
       setSendError('You must be connected to send messages. Chat request pending.');
@@ -895,7 +960,8 @@ export default function PrivateChatScreen() {
                   loading={isRespondingToRequest}
                   onPress={async () => {
                     setIsRespondingToRequest(true);
-                    await respondChatRequest(connectionRequestId, 'accepted', currentUserId, peerUserId);
+                    const target = peerUserId || inferredPeerId;
+                    await respondChatRequest(connectionRequestId, 'accepted', currentUserId, target);
                     setConnectionStatus('accepted');
                     setIsRespondingToRequest(false);
                   }}
@@ -907,7 +973,8 @@ export default function PrivateChatScreen() {
                   disabled={isRespondingToRequest}
                   onPress={async () => {
                     setIsRespondingToRequest(true);
-                    await respondChatRequest(connectionRequestId, 'declined', currentUserId, peerUserId);
+                    const target = peerUserId || inferredPeerId;
+                    await respondChatRequest(connectionRequestId, 'declined', currentUserId, target);
                     setConnectionStatus('declined');
                     setIsRespondingToRequest(false);
                     router.back();
@@ -939,7 +1006,8 @@ export default function PrivateChatScreen() {
                 loading={isRespondingToRequest}
                 onPress={async () => {
                   setIsRespondingToRequest(true);
-                  const res = await sendChatRequest(peerUserId, currentUserId);
+                  const target = peerUserId || inferredPeerId;
+                  const res = await sendChatRequest(target, currentUserId);
                   if (res.success) {
                     setConnectionStatus('pending_sent');
                   }

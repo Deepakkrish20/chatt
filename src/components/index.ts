@@ -10,3 +10,5 @@ export * from './MessageBubble';
 export * from './MessageComposer';
 export * from './AppCard';
 export * from './AuroraBackground';
+export * from './ChameleonLockOverlay';
+

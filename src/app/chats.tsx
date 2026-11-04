@@ -42,11 +42,15 @@ import {
   UserConnectionState,
 } from '@/lib/supabase/types';
 import { DirectConversationPreview } from '@/types';
+import { useSecurity } from '@/context/SecurityContext';
+import { DECOY_CONVERSATIONS } from '@/data/decoyData';
 
 export default function ChatListScreen() {
   const { colors, spacing, radius } = useAppTheme();
   const { user, refreshCapacity } = useAuth();
+  const { chameleonMode } = useSecurity();
 
+  const isDecoy = chameleonMode === 'decoy';
   const currentUserId = user?.id || '';
 
   // Tab state: 'chats' | 'requests'
@@ -79,6 +83,15 @@ export default function ChatListScreen() {
 
   // Load all data
   const loadData = useCallback(async () => {
+    if (isDecoy) {
+      setConversations(DECOY_CONVERSATIONS);
+      setMembers([]);
+      setIncomingRequests([]);
+      setOutgoingRequests([]);
+      setIsLoading(false);
+      return;
+    }
+
     if (!currentUserId) return;
     try {
       const [convList, memberList, connMap, incoming, outgoing] = await Promise.all([
@@ -98,20 +111,20 @@ export default function ChatListScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, isDecoy]);
 
   useEffect(() => {
     let isMounted = true;
 
     const timer = setTimeout(() => {
-      if (currentUserId && isMounted) {
+      if ((currentUserId || isDecoy) && isMounted) {
         loadData();
       } else if (isMounted) {
         setIsLoading(false);
       }
     }, 0);
 
-    if (currentUserId) {
+    if (currentUserId && !isDecoy) {
       // Realtime listener for conversations
       const unsubConvs = subscribeToConversationsList(currentUserId, () => {
         fetchConversations(currentUserId).then((list) => {
@@ -148,7 +161,8 @@ export default function ChatListScreen() {
         clearTimeout(timer);
       };
     }
-  }, [currentUserId, loadData]);
+  }, [currentUserId, loadData, isDecoy]);
+
 
 
   const handleRefresh = async () => {
@@ -441,20 +455,22 @@ export default function ChatListScreen() {
       <SafeAreaView style={styles.safeArea}>
         {/* Top Header */}
         <ScreenHeader
-          title="Chats"
-          subtitle="Permission-Based Messaging"
+          title={isDecoy ? 'Messages' : 'Chats'}
+          subtitle={isDecoy ? 'Direct Messages' : 'Permission-Based Messaging'}
           style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(168, 85, 247, 0.2)' }}
           rightElement={
             <View style={styles.headerActionsGroup}>
-              <Pressable
-                hitSlop={10}
-                onPress={handleOpenNewChatModal}
-                style={({ pressed }) => [styles.plusFab, { opacity: pressed ? 0.8 : 1 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Discover & Connect"
-              >
-                <AppIcon name="plus" size={18} color="#FFFFFF" />
-              </Pressable>
+              {!isDecoy ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={handleOpenNewChatModal}
+                  style={({ pressed }) => [styles.plusFab, { opacity: pressed ? 0.8 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Discover & Connect"
+                >
+                  <AppIcon name="plus" size={18} color="#FFFFFF" />
+                </Pressable>
+              ) : null}
               <Pressable
                 hitSlop={10}
                 onPress={() => router.push('/settings')}
@@ -468,55 +484,58 @@ export default function ChatListScreen() {
           }
         />
 
-        {/* Top Sub-tabs: Chats vs Requests */}
-        <View style={[styles.tabBarContainer, { borderColor: 'rgba(168, 85, 247, 0.2)' }]}>
-          <Pressable
-            onPress={() => setActiveTab('chats')}
-            style={[
-              styles.tabItem,
-              activeTab === 'chats' && styles.tabItemActive,
-              { borderColor: activeTab === 'chats' ? '#A855F7' : 'transparent' },
-            ]}
-          >
-            <ThemedText
-              variant="bodyMedium"
+        {/* Top Sub-tabs: Chats vs Requests (Hidden in Decoy Mode) */}
+        {!isDecoy ? (
+          <View style={[styles.tabBarContainer, { borderColor: 'rgba(168, 85, 247, 0.2)' }]}>
+            <Pressable
+              onPress={() => setActiveTab('chats')}
               style={[
-                styles.tabText,
-                { color: activeTab === 'chats' ? '#FFFFFF' : colors.textMuted },
+                styles.tabItem,
+                activeTab === 'chats' && styles.tabItemActive,
+                { borderColor: activeTab === 'chats' ? '#A855F7' : 'transparent' },
               ]}
             >
-              Chats
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setActiveTab('requests')}
-            style={[
-              styles.tabItem,
-              activeTab === 'requests' && styles.tabItemActive,
-              { borderColor: activeTab === 'requests' ? '#A855F7' : 'transparent' },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <ThemedText
                 variant="bodyMedium"
                 style={[
                   styles.tabText,
-                  { color: activeTab === 'requests' ? '#FFFFFF' : colors.textMuted },
+                  { color: activeTab === 'chats' ? '#FFFFFF' : colors.textMuted },
                 ]}
               >
-                Requests
+                Chats
               </ThemedText>
-              {incomingRequests.length > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <ThemedText variant="label" style={styles.notificationBadgeText}>
-                    {incomingRequests.length}
-                  </ThemedText>
-                </View>
-              ) : null}
-            </View>
-          </Pressable>
-        </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setActiveTab('requests')}
+              style={[
+                styles.tabItem,
+                activeTab === 'requests' && styles.tabItemActive,
+                { borderColor: activeTab === 'requests' ? '#A855F7' : 'transparent' },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ThemedText
+                  variant="bodyMedium"
+                  style={[
+                    styles.tabText,
+                    { color: activeTab === 'requests' ? '#FFFFFF' : colors.textMuted },
+                  ]}
+                >
+                  Requests
+                </ThemedText>
+                {incomingRequests.length > 0 ? (
+                  <View style={styles.notificationBadge}>
+                    <ThemedText variant="label" style={styles.notificationBadgeText}>
+                      {incomingRequests.length}
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          </View>
+        ) : null}
+
 
         {activeTab === 'chats' ? (
           <>

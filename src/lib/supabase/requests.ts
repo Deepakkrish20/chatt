@@ -378,33 +378,28 @@ export async function fetchIncomingChatRequests(
 
       if (!error && data) {
         cloudRequests = data as DatabaseChatRequest[];
+      } else {
+        const localList = await getStoredRequests(currentUserId);
+        cloudRequests = localList.filter(
+          (r) => r.receiver_id === currentUserId && r.status === 'pending'
+        );
       }
     } catch {
-      // Fallback to local storage
+      const localList = await getStoredRequests(currentUserId);
+      cloudRequests = localList.filter(
+        (r) => r.receiver_id === currentUserId && r.status === 'pending'
+      );
     }
+  } else {
+    const localList = await getStoredRequests(currentUserId);
+    cloudRequests = localList.filter(
+      (r) => r.receiver_id === currentUserId && r.status === 'pending'
+    );
   }
-
-  // Merge with local storage
-  const localList = await getStoredRequests(currentUserId);
-  const localIncoming = localList.filter(
-    (r) => r.receiver_id === currentUserId && r.status === 'pending'
-  );
-
-  const map = new Map<string, DatabaseChatRequest>();
-  cloudRequests.forEach((r) => map.set(r.id, r));
-  localIncoming.forEach((r) => {
-    if (!map.has(r.id)) {
-      map.set(r.id, r);
-    }
-  });
-
-  const combined = Array.from(map.values()).sort((a, b) =>
-    b.created_at.localeCompare(a.created_at)
-  );
 
   // Attach sender profiles
   const results: ChatRequestWithProfile[] = await Promise.all(
-    combined.map(async (req) => {
+    cloudRequests.map(async (req) => {
       const senderProfile = await resolveProfile(req.sender_id);
       return {
         ...req,
@@ -437,31 +432,27 @@ export async function fetchOutgoingChatRequests(
 
       if (!error && data) {
         cloudRequests = data as DatabaseChatRequest[];
+      } else {
+        const localList = await getStoredRequests(currentUserId);
+        cloudRequests = localList.filter(
+          (r) => r.sender_id === currentUserId && r.status === 'pending'
+        );
       }
     } catch {
-      // Fallback
+      const localList = await getStoredRequests(currentUserId);
+      cloudRequests = localList.filter(
+        (r) => r.sender_id === currentUserId && r.status === 'pending'
+      );
     }
+  } else {
+    const localList = await getStoredRequests(currentUserId);
+    cloudRequests = localList.filter(
+      (r) => r.sender_id === currentUserId && r.status === 'pending'
+    );
   }
 
-  const localList = await getStoredRequests(currentUserId);
-  const localOutgoing = localList.filter(
-    (r) => r.sender_id === currentUserId && r.status === 'pending'
-  );
-
-  const map = new Map<string, DatabaseChatRequest>();
-  cloudRequests.forEach((r) => map.set(r.id, r));
-  localOutgoing.forEach((r) => {
-    if (!map.has(r.id)) {
-      map.set(r.id, r);
-    }
-  });
-
-  const combined = Array.from(map.values()).sort((a, b) =>
-    b.created_at.localeCompare(a.created_at)
-  );
-
   const results: ChatRequestWithProfile[] = await Promise.all(
-    combined.map(async (req) => {
+    cloudRequests.map(async (req) => {
       const receiverProfile = await resolveProfile(req.receiver_id);
       return {
         ...req,
@@ -471,6 +462,106 @@ export async function fetchOutgoingChatRequests(
   );
 
   return results;
+}
+
+/**
+ * Clear stored chat requests for a user or all users locally.
+ */
+export async function clearAllStoredRequests(userId?: string): Promise<void> {
+  try {
+    if (userId) {
+      await AsyncStorage.removeItem(getRequestsStorageKey(userId));
+    } else {
+      const keys = await AsyncStorage.getAllKeys();
+      const requestKeys = keys.filter((k) => k.startsWith(STORAGE_REQUESTS_KEY_PREFIX));
+      if (requestKeys.length > 0) {
+        await AsyncStorage.multiRemove(requestKeys);
+      }
+    }
+  } catch {
+    // Ignore storage clear error
+  }
+}
+
+/**
+ * Delete a specific chat request from cloud and local storage.
+ */
+export async function deleteChatRequest(
+  requestId: string,
+  currentUserId: string,
+  peerUserId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (isSupabaseConfigured) {
+      await supabase.from('chat_requests').delete().eq('id', requestId);
+    }
+
+    // Clean current user local store
+    const local = await getStoredRequests(currentUserId);
+    const filtered = local.filter((r) => r.id !== requestId);
+    await saveStoredRequests(currentUserId, filtered);
+
+    // Clean peer user local store if known
+    if (peerUserId) {
+      const peerLocal = await getStoredRequests(peerUserId);
+      const peerFiltered = peerLocal.filter((r) => r.id !== requestId);
+      await saveStoredRequests(peerUserId, peerFiltered);
+    }
+
+    broadcastRequestChange({
+      type: 'deleted',
+      requestId,
+      senderId: currentUserId,
+      receiverId: peerUserId,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to delete request' };
+  }
+}
+
+/**
+ * Remove any requests and reset connection between two users back to 'none'.
+ */
+export async function resetConnectionBetweenUsers(
+  user1Id: string,
+  user2Id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('chat_requests')
+        .delete()
+        .or(
+          `and(sender_id.eq.${user1Id},receiver_id.eq.${user2Id}),and(sender_id.eq.${user2Id},receiver_id.eq.${user1Id})`
+        );
+    }
+
+    const cleanUser = async (uId: string, otherId: string) => {
+      const local = await getStoredRequests(uId);
+      const updated = local.filter(
+        (r) =>
+          !(
+            (r.sender_id === uId && r.receiver_id === otherId) ||
+            (r.sender_id === otherId && r.receiver_id === uId)
+          )
+      );
+      await saveStoredRequests(uId, updated);
+    };
+
+    await Promise.all([cleanUser(user1Id, user2Id), cleanUser(user2Id, user1Id)]);
+
+    broadcastRequestChange({
+      type: 'reset',
+      senderId: user1Id,
+      receiverId: user2Id,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to reset connection' };
+  }
 }
 
 /**
@@ -494,23 +585,19 @@ export async function fetchUserConnectionMap(
 
       if (!error && data) {
         allRequests = data as DatabaseChatRequest[];
+        // Cloud is authoritative: sync local store with current cloud state
+        await saveStoredRequests(currentUserId, allRequests);
+      } else {
+        allRequests = await getStoredRequests(currentUserId);
       }
     } catch {
-      // Fallback to local
+      allRequests = await getStoredRequests(currentUserId);
     }
+  } else {
+    allRequests = await getStoredRequests(currentUserId);
   }
 
-  // Merge with local storage
-  const localList = await getStoredRequests(currentUserId);
-  const map = new Map<string, DatabaseChatRequest>();
-  allRequests.forEach((r) => map.set(r.id, r));
-  localList.forEach((r) => {
-    if (!map.has(r.id)) {
-      map.set(r.id, r);
-    }
-  });
-
-  Array.from(map.values()).forEach((req) => {
+  allRequests.forEach((req) => {
     const isSender = req.sender_id === currentUserId;
     const peerId = isSender ? req.receiver_id : req.sender_id;
 
