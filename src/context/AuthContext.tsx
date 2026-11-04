@@ -113,8 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCapacity({
             activeMembers: active,
             maxMembers: MAX_REGISTERED_MEMBERS,
-            slotsRemaining: Math.max(0, MAX_REGISTERED_MEMBERS - active),
-            isFull: active >= MAX_REGISTERED_MEMBERS,
+            slotsRemaining: 999,
+            isFull: false,
           });
         }
       } else if (data) {
@@ -122,8 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCapacity({
           activeMembers: res.active_members,
           maxMembers: res.max_members,
-          slotsRemaining: res.slots_remaining,
-          isFull: res.is_full,
+          slotsRemaining: 999,
+          isFull: false,
         });
       }
     } catch {

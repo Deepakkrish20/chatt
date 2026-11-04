@@ -6,7 +6,7 @@
  * with private one-to-one messaging only.
  */
 
-export const MAX_REGISTERED_MEMBERS = 10;
+export const MAX_REGISTERED_MEMBERS = 10000;
 
 export interface UserSummary {
   id: string;

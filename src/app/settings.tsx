@@ -17,7 +17,7 @@ import { ADMIN_USER } from '@/data/mockData';
 
 export default function SettingsScreen() {
   const { colors, spacing, radius } = useAppTheme();
-  const { user, profile, isAdmin, adminCreateMember, signOut, capacity, isConfigured } = useAuth();
+  const { user, profile, isAdmin, adminCreateMember, signOut, isConfigured } = useAuth();
 
   // Appearance & Privacy settings UI state
   const [highContrastBorders, setHighContrastBorders] = useState(true);
@@ -201,7 +201,7 @@ export default function SettingsScreen() {
                   title={isProvisioning ? 'Creating Member…' : 'Create Member Account'}
                   variant="primary"
                   loading={isProvisioning}
-                  disabled={isProvisioning || capacity.isFull}
+                  disabled={isProvisioning}
                   onPress={handleCreateMember}
                   style={{ marginTop: spacing.xs }}
                 />

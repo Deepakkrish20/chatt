@@ -5,3 +5,5 @@
 export * from './client';
 export * from './types';
 export * from './messaging';
+export * from './requests';
+

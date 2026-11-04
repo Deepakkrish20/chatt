@@ -516,3 +516,214 @@ BEGIN
   ON CONFLICT (id) DO UPDATE
   SET username = 'janathiru', display_name = 'Jana Thiru', status = 'online', updated_at = NOW();
 END $$;
+
+-- ====================================================================
+-- Chatt — Module: Chat Request & Accept System
+-- ====================================================================
+
+CREATE TABLE IF NOT EXISTS public.chat_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  receiver_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  CONSTRAINT chk_different_request_participants CHECK (sender_id <> receiver_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_requests_unique_pair
+  ON public.chat_requests (LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id));
+
+CREATE INDEX IF NOT EXISTS idx_chat_requests_sender ON public.chat_requests(sender_id);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_receiver ON public.chat_requests(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_status ON public.chat_requests(status);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_incoming_pending
+  ON public.chat_requests(receiver_id, created_at DESC)
+  WHERE status = 'pending';
+
+ALTER TABLE public.chat_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own chat requests" ON public.chat_requests;
+CREATE POLICY "Users can view their own chat requests"
+  ON public.chat_requests FOR SELECT
+  TO authenticated
+  USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+
+DROP POLICY IF EXISTS "Users can insert requests as sender" ON public.chat_requests;
+CREATE POLICY "Users can insert requests as sender"
+  ON public.chat_requests FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = sender_id
+    AND sender_id <> receiver_id
+  );
+
+DROP POLICY IF EXISTS "Participants can update their chat requests" ON public.chat_requests;
+CREATE POLICY "Participants can update their chat requests"
+  ON public.chat_requests FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = sender_id OR auth.uid() = receiver_id)
+  WITH CHECK (auth.uid() = sender_id OR auth.uid() = receiver_id);
+
+DROP POLICY IF EXISTS "Participants can delete their chat requests" ON public.chat_requests;
+CREATE POLICY "Participants can delete their chat requests"
+  ON public.chat_requests FOR DELETE
+  TO authenticated
+  USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_requests;
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.send_chat_request(target_user_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  current_user_id UUID := auth.uid();
+  existing_record RECORD;
+  result_id UUID;
+BEGIN
+  IF current_user_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Authentication required.');
+  END IF;
+
+  IF current_user_id = target_user_id THEN
+    RETURN json_build_object('success', false, 'error', 'Cannot send a chat request to yourself.');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = target_user_id) THEN
+    RETURN json_build_object('success', false, 'error', 'Target user does not exist.');
+  END IF;
+
+  SELECT * INTO existing_record
+  FROM public.chat_requests
+  WHERE (sender_id = current_user_id AND receiver_id = target_user_id)
+     OR (sender_id = target_user_id AND receiver_id = current_user_id)
+  LIMIT 1;
+
+  IF existing_record.id IS NOT NULL THEN
+    IF existing_record.status = 'accepted' THEN
+      RETURN json_build_object(
+        'success', true,
+        'request_id', existing_record.id,
+        'status', 'accepted',
+        'message', 'Already connected.'
+      );
+    END IF;
+
+    IF existing_record.status = 'pending' AND existing_record.sender_id = current_user_id THEN
+      RETURN json_build_object(
+        'success', true,
+        'request_id', existing_record.id,
+        'status', 'pending',
+        'message', 'Request already sent and pending.'
+      );
+    END IF;
+
+    IF existing_record.status = 'pending' AND existing_record.sender_id = target_user_id THEN
+      UPDATE public.chat_requests
+      SET status = 'accepted', updated_at = NOW()
+      WHERE id = existing_record.id
+      RETURNING id INTO result_id;
+
+      PERFORM public.get_or_create_conversation(target_user_id);
+
+      RETURN json_build_object(
+        'success', true,
+        'request_id', result_id,
+        'status', 'accepted',
+        'message', 'Mutual request detected: Connection accepted!'
+      );
+    END IF;
+
+    UPDATE public.chat_requests
+    SET sender_id = current_user_id,
+        receiver_id = target_user_id,
+        status = 'pending',
+        updated_at = NOW()
+    WHERE id = existing_record.id
+    RETURNING id INTO result_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'request_id', result_id,
+      'status', 'pending',
+      'message', 'Chat request sent successfully.'
+    );
+  END IF;
+
+  INSERT INTO public.chat_requests (sender_id, receiver_id, status)
+  VALUES (current_user_id, target_user_id, 'pending')
+  RETURNING id INTO result_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'request_id', result_id,
+    'status', 'pending',
+    'message', 'Chat request sent successfully.'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.respond_chat_request(
+  request_id UUID,
+  new_status TEXT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  current_user_id UUID := auth.uid();
+  req_record RECORD;
+  conv_id UUID := NULL;
+BEGIN
+  IF current_user_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Authentication required.');
+  END IF;
+
+  IF new_status NOT IN ('accepted', 'declined') THEN
+    RETURN json_build_object('success', false, 'error', 'Invalid status. Must be accepted or declined.');
+  END IF;
+
+  SELECT * INTO req_record
+  FROM public.chat_requests
+  WHERE id = request_id;
+
+  IF req_record.id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Chat request not found.');
+  END IF;
+
+  IF req_record.receiver_id <> current_user_id THEN
+    RETURN json_build_object('success', false, 'error', 'You are not authorized to respond to this request.');
+  END IF;
+
+  UPDATE public.chat_requests
+  SET status = new_status,
+      updated_at = NOW()
+  WHERE id = request_id;
+
+  IF new_status = 'accepted' THEN
+    conv_id := public.get_or_create_conversation(req_record.sender_id);
+  END IF;
+
+  RETURN json_build_object(
+    'success', true,
+    'status', new_status,
+    'conversation_id', conv_id
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.send_chat_request(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.respond_chat_request(UUID, TEXT) TO authenticated;
+

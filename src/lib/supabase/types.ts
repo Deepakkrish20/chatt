@@ -55,3 +55,22 @@ export interface ConversationWithDetails {
   lastMessageAt: string | null;
   unreadCount: number;
 }
+
+export type ChatRequestStatus = 'pending' | 'accepted' | 'declined';
+
+export type UserConnectionState = 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'declined';
+
+export interface DatabaseChatRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: ChatRequestStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatRequestWithProfile extends DatabaseChatRequest {
+  sender?: ConversationParticipantProfile;
+  receiver?: ConversationParticipantProfile;
+}
+

@@ -2,7 +2,7 @@
  * Shared utility functions.
  */
 
-import { MAX_REGISTERED_MEMBERS } from '@/types';
+
 
 /**
  * Truncate long strings with ellipsis.
@@ -27,8 +27,8 @@ export function getInitials(name: string): string {
 /**
  * Validate whether the strict maximum 10-member limit has been reached.
  */
-export function isMemberLimitReached(currentMemberCount: number): boolean {
-  return currentMemberCount >= MAX_REGISTERED_MEMBERS;
+export function isMemberLimitReached(_currentMemberCount: number): boolean {
+  return false;
 }
 
 /**

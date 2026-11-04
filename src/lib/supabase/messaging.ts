@@ -179,30 +179,6 @@ export async function fetchConversations(
         .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
-      // If no conversation found in DB yet, auto-provision 1:1 conversation with the other registered member
-      if (!convError && (!convData || convData.length === 0)) {
-        const { data: otherProfiles } = await supabase
-          .from('profiles')
-          .select('id, username, display_name, avatar_url, status')
-          .neq('id', currentUserId)
-          .limit(1);
-
-        if (otherProfiles && otherProfiles.length > 0) {
-          const target = otherProfiles[0];
-          const { conversationId } = await getOrCreateConversation(target.id, currentUserId);
-          if (conversationId) {
-            const { data: reloadedConvs } = await supabase
-              .from('conversations')
-              .select('*')
-              .or(`user1_id.eq.${currentUserId},user2_id.eq.${currentUserId}`)
-              .order('last_message_at', { ascending: false, nullsFirst: false });
-            if (reloadedConvs && reloadedConvs.length > 0) {
-              convData = reloadedConvs;
-            }
-          }
-        }
-      }
-
       if (!convError && convData && convData.length > 0) {
         const conversations = convData as DatabaseConversation[];
         const otherParticipantIds = Array.from(
@@ -309,18 +285,9 @@ export async function fetchConversations(
     // Ignore
   }
 
-  const defaultPreview: DirectConversationPreview = {
-    id: canonicalConvId,
-    participantId: peer.id,
-    participantName: peer.name,
-    participantUsername: peer.username,
-    isOnline: true,
-    lastMessageSnippet: 'No messages yet.',
-    lastMessageTimestamp: 'Just now',
-    unreadCount: 0,
-  };
-  return [defaultPreview];
+  return [];
 }
+
 
 /**
  * Fetch registered network members to start a new 1:1 conversation.

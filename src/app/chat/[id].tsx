@@ -20,6 +20,7 @@ import {
   MessageBubble,
   MessageComposer,
   AppIcon,
+  AppButton,
   AuroraBackground,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
@@ -35,9 +36,13 @@ import {
   getRemainingDeleteTime,
   toggleMessageReaction,
   sendTypingStatus,
+  respondChatRequest,
+  sendChatRequest,
+  fetchUserConnectionMap,
   supabase,
   isSupabaseConfigured,
 } from '@/lib/supabase';
+import { UserConnectionState } from '@/lib/supabase/types';
 import { DirectMessage } from '@/types';
 
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
@@ -77,6 +82,10 @@ export default function PrivateChatScreen() {
     isParamMyOwnName || !params.name ? defaultPeerName : params.name
   );
   const [isOnline, setIsOnline] = useState(params.online === 'true');
+  const [peerUserId, setPeerUserId] = useState<string>(params.participantId || '');
+  const [connectionStatus, setConnectionStatus] = useState<UserConnectionState>('accepted');
+  const [connectionRequestId, setConnectionRequestId] = useState<string>('');
+  const [isRespondingToRequest, setIsRespondingToRequest] = useState(false);
 
   // Load actual peer profile if conversation is on Supabase
   useEffect(() => {
@@ -93,6 +102,7 @@ export default function PrivateChatScreen() {
         if (!isMounted || !conv) return;
         const otherId = conv.user1_id === currentUserId ? conv.user2_id : conv.user1_id;
         if (!otherId) return;
+        setPeerUserId(otherId);
         const { data: peerProf } = await supabase
           .from('profiles')
           .select('display_name, username, status')
@@ -108,6 +118,28 @@ export default function PrivateChatScreen() {
       isMounted = false;
     };
   }, [conversationId, currentUserId]);
+
+  // Check connection status between current user and peer
+  useEffect(() => {
+    let isMounted = true;
+    if (!currentUserId || !peerUserId) return;
+
+    fetchUserConnectionMap(currentUserId).then((map) => {
+      if (!isMounted) return;
+      const conn = map[peerUserId];
+      if (conn) {
+        setConnectionStatus(conn.status);
+        setConnectionRequestId(conn.requestId);
+      } else {
+        setConnectionStatus('accepted');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUserId, peerUserId]);
+
 
   // Resolve real conversation UUID if opened with stale 'conv_*' parameter
   useEffect(() => {
@@ -441,6 +473,11 @@ export default function PrivateChatScreen() {
 
   const handleSendMessage = async (content: string) => {
     if (isSending || !content.trim()) return;
+
+    if (connectionStatus !== 'accepted') {
+      setSendError('You must be connected to send messages. Chat request pending.');
+      return;
+    }
 
     setIsSending(true);
     setSendError(null);
@@ -813,11 +850,115 @@ export default function PrivateChatScreen() {
             </View>
           ) : null}
 
+          {/* Permission Guard Banner */}
+          {connectionStatus === 'pending_sent' ? (
+            <View
+              style={[
+                styles.permissionBanner,
+                {
+                  backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                  borderColor: 'rgba(168, 85, 247, 0.35)',
+                  marginHorizontal: spacing.md,
+                  marginBottom: spacing.xs,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                },
+              ]}
+            >
+              <AppIcon name="lock" size={16} color="#C084FC" />
+              <ThemedText variant="captionMedium" style={{ color: '#E9D5FF', flex: 1, marginLeft: 8 }}>
+                Request Pending: Waiting for {participantName} to accept.
+              </ThemedText>
+            </View>
+          ) : connectionStatus === 'pending_received' ? (
+            <View
+              style={[
+                styles.permissionBanner,
+                {
+                  backgroundColor: 'rgba(168, 85, 247, 0.18)',
+                  borderColor: '#A855F7',
+                  marginHorizontal: spacing.md,
+                  marginBottom: spacing.xs,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                },
+              ]}
+            >
+              <ThemedText variant="captionMedium" style={{ color: '#FFFFFF', flex: 1 }}>
+                {participantName} wants to chat.
+              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <AppButton
+                  title="Accept"
+                  variant="primary"
+                  size="sm"
+                  loading={isRespondingToRequest}
+                  onPress={async () => {
+                    setIsRespondingToRequest(true);
+                    await respondChatRequest(connectionRequestId, 'accepted', currentUserId, peerUserId);
+                    setConnectionStatus('accepted');
+                    setIsRespondingToRequest(false);
+                  }}
+                />
+                <AppButton
+                  title="Decline"
+                  variant="outline"
+                  size="sm"
+                  disabled={isRespondingToRequest}
+                  onPress={async () => {
+                    setIsRespondingToRequest(true);
+                    await respondChatRequest(connectionRequestId, 'declined', currentUserId, peerUserId);
+                    setConnectionStatus('declined');
+                    setIsRespondingToRequest(false);
+                    router.back();
+                  }}
+                />
+              </View>
+            </View>
+          ) : connectionStatus === 'declined' || connectionStatus === 'none' ? (
+            <View
+              style={[
+                styles.permissionBanner,
+                {
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                  marginHorizontal: spacing.md,
+                  marginBottom: spacing.xs,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                },
+              ]}
+            >
+              <ThemedText variant="captionMedium" style={{ color: '#FCA5A5', flex: 1 }}>
+                Permission required to chat.
+              </ThemedText>
+              <AppButton
+                title="+ Send Request"
+                variant="primary"
+                size="sm"
+                loading={isRespondingToRequest}
+                onPress={async () => {
+                  setIsRespondingToRequest(true);
+                  const res = await sendChatRequest(peerUserId, currentUserId);
+                  if (res.success) {
+                    setConnectionStatus('pending_sent');
+                  }
+                  setIsRespondingToRequest(false);
+                }}
+              />
+            </View>
+          ) : null}
+
           {/* Message Composer */}
           <MessageComposer
             onSendMessage={handleSendMessage}
             onTyping={handleUserTyping}
-            disabled={isSending}
+            disabled={isSending || connectionStatus !== 'accepted'}
+            placeholder={
+              connectionStatus !== 'accepted'
+                ? 'Chat request pending…'
+                : 'Message…'
+            }
             bottomInset={composerBottomInset}
           />
         </KeyboardAvoidingView>
@@ -1462,4 +1603,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 4,
   },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+  },
 });
+
