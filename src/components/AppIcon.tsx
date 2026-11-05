@@ -26,7 +26,9 @@ export type IconName =
   | 'play'
   | 'pause'
   | 'headphones'
-  | 'earpiece';
+  | 'earpiece'
+  | 'clock'
+  | 'hourglass';
 
 export interface AppIconProps {
   name: IconName;
@@ -628,6 +630,96 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 }}
               />
             </View>
+          </View>
+        );
+
+      case 'clock':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.78,
+                height: size * 0.78,
+                borderRadius: size * 0.39,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  width: 1.8,
+                  height: size * 0.24,
+                  backgroundColor: iconColor,
+                  top: size * 0.14,
+                  borderRadius: 1,
+                }}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  width: size * 0.2,
+                  height: 1.8,
+                  backgroundColor: iconColor,
+                  left: size * 0.36,
+                  borderRadius: 1,
+                }}
+              />
+            </View>
+          </View>
+        );
+
+      case 'hourglass':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.64,
+                height: 1.8,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+                marginBottom: 1,
+              }}
+            />
+            <View
+              style={{
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderLeftWidth: size * 0.24,
+                borderRightWidth: size * 0.24,
+                borderTopWidth: size * 0.24,
+                borderBottomWidth: 0,
+                borderLeftColor: 'transparent',
+                borderRightColor: 'transparent',
+                borderTopColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderLeftWidth: size * 0.24,
+                borderRightWidth: size * 0.24,
+                borderBottomWidth: size * 0.24,
+                borderTopWidth: 0,
+                borderLeftColor: 'transparent',
+                borderRightColor: 'transparent',
+                borderBottomColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                width: size * 0.64,
+                height: 1.8,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+                marginTop: 1,
+              }}
+            />
           </View>
         );
 

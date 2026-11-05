@@ -20,6 +20,7 @@ import { DirectConversationPreview, DirectMessage, MessageReaction } from '@/typ
 import { formatConversationTime, formatMessageTime } from '@/utils';
 import { NETWORK_ACCOUNTS } from '@/data/mockData';
 import { isWhisperMessage, parseWhisperMessage, formatAudioDuration } from '@/lib/audio';
+import { isCapsuleMessage, parseCapsuleMessage, isCapsuleUnlocked, getRemainingCountdown } from '@/lib/capsule';
 
 const STORAGE_MESSAGES_KEY_PREFIX = '@chatt_msg_history_';
 const STORAGE_CONVERSATIONS_KEY = '@chatt_conversations_index';
@@ -126,9 +127,19 @@ async function updateConversationSummaryLocally(
     const raw = await AsyncStorage.getItem(storageKey);
     const list: DirectConversationPreview[] = raw ? JSON.parse(raw) : [];
 
-    const snippet = isWhisperMessage(lastMessage.content)
-      ? `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(lastMessage.content)?.duration || 0)})`
-      : lastMessage.content;
+    let snippet = lastMessage.content;
+    if (isWhisperMessage(lastMessage.content)) {
+      snippet = `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(lastMessage.content)?.duration || 0)})`;
+    } else if (isCapsuleMessage(lastMessage.content)) {
+      const cap = parseCapsuleMessage(lastMessage.content);
+      if (cap) {
+        snippet = isCapsuleUnlocked(cap)
+          ? '🔓 Memory Capsule (Unlocked)'
+          : `⏳ Memory Capsule (${getRemainingCountdown(cap.unlockAt).formatted})`;
+      } else {
+        snippet = '⏳ Time Capsule';
+      }
+    }
 
     const existingIndex = list.findIndex((c) => c.id === conversationId);
     if (existingIndex >= 0) {
@@ -293,9 +304,19 @@ export async function fetchConversations(
             const profile = profileMap.get(otherId);
 
             const rawSnippet = c.last_message_text || 'No messages yet.';
-            const displaySnippet = isWhisperMessage(rawSnippet)
-              ? `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(rawSnippet)?.duration || 0)})`
-              : rawSnippet;
+            let displaySnippet = rawSnippet;
+            if (isWhisperMessage(rawSnippet)) {
+              displaySnippet = `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(rawSnippet)?.duration || 0)})`;
+            } else if (isCapsuleMessage(rawSnippet)) {
+              const cap = parseCapsuleMessage(rawSnippet);
+              if (cap) {
+                displaySnippet = isCapsuleUnlocked(cap)
+                  ? '🔓 Memory Capsule (Unlocked)'
+                  : `⏳ Memory Capsule (${getRemainingCountdown(cap.unlockAt).formatted})`;
+              } else {
+                displaySnippet = '⏳ Time Capsule';
+              }
+            }
 
             return {
               id: c.id,

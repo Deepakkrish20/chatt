@@ -484,6 +484,49 @@ export default function SettingsScreen() {
 
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ThemedText variant="bodyMedium">Time-Locked Memory Capsules</ThemedText>
+                    <View
+                      style={[
+                        styles.badgePill,
+                        {
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          borderColor: 'rgba(245, 158, 11, 0.4)',
+                          borderRadius: 4,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                        },
+                      ]}
+                    >
+                      <ThemedText style={{ color: '#FBBF24', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>
+                        TIMELOCK VAULT
+                      </ThemedText>
+                    </View>
+                  </View>
+                  <ThemedText variant="caption" tone="secondary">
+                    Cryptographically sealed future messages that unlock with live countdown timers.
+                  </ThemedText>
+                </View>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(245, 158, 11, 0.35)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AppIcon name="hourglass" size={18} color="#FBBF24" />
+                </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextGroup}>
                   <ThemedText variant="bodyMedium">Read Receipts</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
                     Notify peer when messages are viewed

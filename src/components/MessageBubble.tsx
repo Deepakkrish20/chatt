@@ -5,6 +5,7 @@ import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
 import { parseWhisperMessage, formatAudioDuration, WhisperAudioData } from '@/lib/audio';
+import { parseCapsuleMessage, getRemainingCountdown, formatUnlockDate } from '@/lib/capsule';
 
 export interface MessageBubbleProps {
   message: DirectMessage;
@@ -44,6 +45,29 @@ export function MessageBubble({
     if (isDeleted) return null;
     return parseWhisperMessage(message.content);
   }, [message.content, isDeleted]);
+
+  const capsuleData = useMemo(() => {
+    if (isDeleted) return null;
+    return parseCapsuleMessage(message.content);
+  }, [message.content, isDeleted]);
+
+  const [capsuleCountdown, setCapsuleCountdown] = useState(() =>
+    capsuleData ? getRemainingCountdown(capsuleData.unlockAt) : null
+  );
+
+  useEffect(() => {
+    if (!capsuleData || capsuleData.unlockAt <= Date.now()) return;
+
+    const interval = setInterval(() => {
+      const current = getRemainingCountdown(capsuleData.unlockAt);
+      setCapsuleCountdown(current);
+      if (current.isUnlocked) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [capsuleData]);
 
   useEffect(() => {
     if (animate) {
@@ -178,7 +202,7 @@ export function MessageBubble({
               borderBottomRightRadius: isOutgoing ? 4 : 18,
               opacity: pressed && !isPrivacyLensActive && (onLongPress || onDoubleTap) ? 0.8 : 1,
               overflow: 'hidden',
-              minWidth: whisperData ? 225 : undefined,
+              minWidth: whisperData ? 225 : capsuleData ? 245 : undefined,
             },
             isOutgoing
               ? {
@@ -301,6 +325,85 @@ export function MessageBubble({
                         : formatAudioDuration(whisperData.duration)}
                     </Text>
                   </View>
+                </Animated.View>
+              ) : capsuleData ? (
+                <Animated.View
+                  style={[
+                    styles.capsuleCard,
+                    {
+                      opacity: isPrivacyLensActive
+                        ? revealAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.08, 1],
+                          })
+                        : 1,
+                      ...(isPrivacyLensActive && Platform.OS === 'web'
+                        ? ({
+                            filter: isRevealed ? 'none' : 'blur(8px)',
+                            userSelect: isRevealed ? 'text' : 'none',
+                          } as any)
+                        : {}),
+                    },
+                  ]}
+                >
+                  {/* Capsule Header Badge */}
+                  <View style={styles.capsuleBadgeRow}>
+                    <View
+                      style={[
+                        styles.capsuleLockPill,
+                        capsuleCountdown?.isUnlocked
+                          ? styles.capsuleUnlockedPill
+                          : styles.capsuleLockedPill,
+                      ]}
+                    >
+                      <AppIcon
+                        name={capsuleCountdown?.isUnlocked ? 'check' : 'lock'}
+                        size={9}
+                        color={capsuleCountdown?.isUnlocked ? '#34D399' : '#FBBF24'}
+                      />
+                      <Text
+                        style={[
+                          styles.capsuleLockText,
+                          { color: capsuleCountdown?.isUnlocked ? '#34D399' : '#FBBF24' },
+                        ]}
+                      >
+                        {capsuleCountdown?.isUnlocked ? 'CAPSULE UNLOCKED' : 'TIME-LOCKED CAPSULE'}
+                      </Text>
+                    </View>
+                    <AppIcon
+                      name={capsuleCountdown?.isUnlocked ? 'clock' : 'hourglass'}
+                      size={12}
+                      color={capsuleCountdown?.isUnlocked ? '#34D399' : '#FBBF24'}
+                    />
+                  </View>
+
+                  {capsuleData.title ? (
+                    <Text style={styles.capsuleTitleText}>{capsuleData.title}</Text>
+                  ) : null}
+
+                  {capsuleCountdown?.isUnlocked ? (
+                    <View style={styles.capsuleRevealedBox}>
+                      <Text style={styles.capsuleRevealedText}>
+                        {capsuleData.ciphertext}
+                      </Text>
+                      <Text style={styles.capsuleUnlockedTimeLabel}>
+                        Unlocked • {formatUnlockDate(capsuleData.unlockAt)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.capsuleLockedBox}>
+                      <Text style={styles.capsuleTimerLabel}>UNLOCKS IN</Text>
+                      <Text style={styles.capsuleTimerValue}>
+                        {capsuleCountdown?.formatted || '...'}
+                      </Text>
+                      <View style={styles.capsuleVeilRow}>
+                        <AppIcon name="lock" size={10} color="rgba(255, 255, 255, 0.45)" />
+                        <Text style={styles.capsuleVeilText}>
+                          Sealed until {formatUnlockDate(capsuleData.unlockAt)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </Animated.View>
               ) : (
                 <Animated.Text
@@ -457,6 +560,97 @@ const styles = StyleSheet.create({
   whisperCard: {
     paddingVertical: 2,
     gap: 6,
+  },
+  capsuleCard: {
+    paddingVertical: 2,
+    gap: 6,
+    minWidth: 230,
+  },
+  capsuleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 2,
+  },
+  capsuleLockPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  capsuleLockedPill: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  capsuleUnlockedPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  capsuleLockText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  capsuleTitleText: {
+    color: '#E9D5FF',
+    fontWeight: '700',
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  capsuleLockedBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  capsuleTimerLabel: {
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  capsuleTimerValue: {
+    color: '#FBBF24',
+    fontSize: 20,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
+    marginVertical: 2,
+  },
+  capsuleVeilRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  capsuleVeilText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 10,
+  },
+  capsuleRevealedBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  capsuleRevealedText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '500',
+  },
+  capsuleUnlockedTimeLabel: {
+    color: 'rgba(16, 185, 129, 0.85)',
+    fontSize: 10,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   whisperBadgeRow: {
     flexDirection: 'row',

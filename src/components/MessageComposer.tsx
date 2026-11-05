@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Animated, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 import { createWhisperRecorder, formatWhisperMessage, formatAudioDuration, WhisperRecorder } from '@/lib/audio';
+import { formatCapsuleMessage } from '@/lib/capsule';
 
 export interface MessageComposerProps {
   onSendMessage?: (content: string) => void;
@@ -12,6 +13,14 @@ export interface MessageComposerProps {
   disabled?: boolean;
   bottomInset?: number;
 }
+
+const CAPSULE_PRESETS = [
+  { label: '+1 Min (Test)', durationMs: 60 * 1000, description: 'In 1 minute (Fast Test)' },
+  { label: '+5 Mins', durationMs: 5 * 60 * 1000, description: 'In 5 minutes' },
+  { label: '+1 Hour', durationMs: 60 * 60 * 1000, description: 'In 1 hour' },
+  { label: 'Tomorrow', durationMs: 24 * 60 * 60 * 1000, description: 'In 24 hours (Tomorrow)' },
+  { label: '+7 Days', durationMs: 7 * 24 * 60 * 60 * 1000, description: 'In 7 days (Next week)' },
+];
 
 export function MessageComposer({
   onSendMessage,
@@ -30,6 +39,38 @@ export function MessageComposer({
   const recorderRef = useRef<WhisperRecorder | null>(null);
   const useNativeDriver = Platform.OS !== 'web';
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Time-Locked Capsule State
+  const [isCapsuleModalOpen, setIsCapsuleModalOpen] = useState(false);
+  const [capsuleText, setCapsuleText] = useState('');
+  const [capsuleTitle, setCapsuleTitle] = useState('');
+  const [selectedDurationMs, setSelectedDurationMs] = useState(60 * 1000);
+  const [capsuleError, setCapsuleError] = useState('');
+  const [isSealingCapsule, setIsSealingCapsule] = useState(false);
+
+  const handleSealAndSendCapsule = () => {
+    const trimmed = capsuleText.trim();
+    if (!trimmed) {
+      setCapsuleError('Please enter a message for your capsule.');
+      return;
+    }
+    setCapsuleError('');
+    setIsSealingCapsule(true);
+    const unlockAt = Date.now() + selectedDurationMs;
+    const capsuleMsg = formatCapsuleMessage({
+      id: `cap_${Date.now()}`,
+      ciphertext: trimmed,
+      unlockAt,
+      createdAt: Date.now(),
+      title: capsuleTitle.trim() || undefined,
+    });
+    onSendMessage?.(capsuleMsg);
+    setCapsuleText('');
+    setCapsuleTitle('');
+    setSelectedDurationMs(60 * 1000);
+    setIsSealingCapsule(false);
+    setIsCapsuleModalOpen(false);
+  };
 
   useEffect(() => {
     return () => {
@@ -183,6 +224,25 @@ export function MessageComposer({
       ]}
     >
       <View style={styles.composerRow}>
+        {!isRecording ? (
+          <Pressable
+            disabled={disabled}
+            hitSlop={8}
+            onPress={() => {
+              setCapsuleError('');
+              setIsCapsuleModalOpen(true);
+            }}
+            style={({ pressed }) => [
+              styles.capsuleTriggerBtn,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Create time capsule"
+          >
+            <AppIcon name="hourglass" size={17} color="#C084FC" />
+          </Pressable>
+        ) : null}
+
         {isRecording ? (
           /* Whisper Recording Active Capsule */
           <View style={[styles.inputCapsule, styles.recordingCapsule]}>
@@ -309,6 +369,140 @@ export function MessageComposer({
           </Pressable>
         </Animated.View>
       </View>
+
+      {/* Create Time Capsule Modal */}
+      <Modal
+        visible={isCapsuleModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isSealingCapsule) setIsCapsuleModalOpen(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            if (!isSealingCapsule) setIsCapsuleModalOpen(false);
+          }}
+        >
+          <Pressable
+            style={styles.capsuleModalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <View style={styles.capsuleModalHeader}>
+              <View style={styles.capsuleModalIconBubble}>
+                <AppIcon name="hourglass" size={20} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.capsuleModalTitle}>Time-Locked Capsule</Text>
+                <Text style={styles.capsuleModalSubtitle}>
+                  Sealed message that unlocks at a future time
+                </Text>
+              </View>
+              <Pressable
+                hitSlop={10}
+                onPress={() => setIsCapsuleModalOpen(false)}
+                style={{ padding: 4 }}
+              >
+                <AppIcon name="close" size={18} color="#94A3B8" />
+              </Pressable>
+            </View>
+
+            {/* Secret Message Input */}
+            <View style={styles.capsuleInputBox}>
+              <TextInput
+                value={capsuleText}
+                onChangeText={setCapsuleText}
+                placeholder="Write your secret message for the future…"
+                placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                style={styles.capsuleTextInput}
+              />
+            </View>
+
+            {/* Optional Title / Theme */}
+            <View style={styles.capsuleTitleInputBox}>
+              <TextInput
+                value={capsuleTitle}
+                onChangeText={setCapsuleTitle}
+                placeholder="Capsule label (e.g. Birthday Note) — optional"
+                placeholderTextColor="rgba(255, 255, 255, 0.35)"
+                style={styles.capsuleTitleInput}
+              />
+            </View>
+
+            {/* Unlock Preset Selectors */}
+            <Text style={styles.capsuleDurationLabel}>SELECT UNLOCK TIME</Text>
+            <View style={styles.capsulePresetRow}>
+              {CAPSULE_PRESETS.map((preset) => {
+                const isSelected = selectedDurationMs === preset.durationMs;
+                return (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() => setSelectedDurationMs(preset.durationMs)}
+                    style={[
+                      styles.capsulePresetChip,
+                      isSelected && styles.capsulePresetChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.capsulePresetText,
+                        isSelected && styles.capsulePresetTextActive,
+                      ]}
+                    >
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Unlock Summary Preview */}
+            <View style={styles.capsuleUnlockPreviewBox}>
+              <AppIcon name="clock" size={13} color="#FBBF24" />
+              <Text style={styles.capsuleUnlockPreviewText}>
+                Unlocks: {CAPSULE_PRESETS.find((p) => p.durationMs === selectedDurationMs)?.description || 'In 1 minute'}
+              </Text>
+            </View>
+
+            {capsuleError ? (
+              <Text style={styles.capsuleErrorText}>{capsuleError}</Text>
+            ) : null}
+
+            {/* Actions */}
+            <View style={styles.capsuleModalActionRow}>
+              <Pressable
+                onPress={() => setIsCapsuleModalOpen(false)}
+                style={styles.capsuleCancelBtn}
+              >
+                <Text style={styles.capsuleCancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleSealAndSendCapsule}
+                disabled={!capsuleText.trim()}
+                style={[
+                  styles.capsuleSendBtn,
+                  !capsuleText.trim() && { opacity: 0.5 },
+                ]}
+              >
+                <LinearGradient
+                  colors={['#D97706', '#B45309']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <AppIcon name="lock" size={14} color="#FFFFFF" />
+                <Text style={styles.capsuleSendBtnText}>Seal & Send Capsule</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -324,6 +518,185 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  capsuleTriggerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#181822',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  capsuleModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  capsuleModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  capsuleModalIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capsuleModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  capsuleModalSubtitle: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  capsuleInputBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    minHeight: 88,
+  },
+  capsuleTextInput: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
+    padding: 0,
+    textAlignVertical: 'top',
+  },
+  capsuleTitleInputBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  capsuleTitleInput: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    padding: 0,
+  },
+  capsuleDurationLabel: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  capsulePresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  capsulePresetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  capsulePresetChipActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    borderColor: '#F59E0B',
+  },
+  capsulePresetText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  capsulePresetTextActive: {
+    color: '#FBBF24',
+    fontWeight: '700',
+  },
+  capsuleUnlockPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  capsuleUnlockPreviewText: {
+    color: '#FDE68A',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  capsuleErrorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  capsuleModalActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  capsuleCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capsuleCancelText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  capsuleSendBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+    paddingVertical: 12,
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  capsuleSendBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   inputCapsule: {
     flex: 1,
