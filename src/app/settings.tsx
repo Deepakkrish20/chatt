@@ -441,6 +441,49 @@ export default function SettingsScreen() {
 
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ThemedText variant="bodyMedium">Earpiece-Only Whispers</ThemedText>
+                    <View
+                      style={[
+                        styles.badgePill,
+                        {
+                          backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                          borderColor: 'rgba(168, 85, 247, 0.4)',
+                          borderRadius: 4,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                        },
+                      ]}
+                    >
+                      <ThemedText style={{ color: '#C084FC', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>
+                        ZERO LOUDSPEAKER
+                      </ThemedText>
+                    </View>
+                  </View>
+                  <ThemedText variant="caption" tone="secondary">
+                    Voice notes physically refuse open loudspeaker. Audio routes exclusively to in-ear proximity or private headphones.
+                  </ThemedText>
+                </View>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(168, 85, 247, 0.35)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AppIcon name="headphones" size={18} color="#C084FC" />
+                </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextGroup}>
                   <ThemedText variant="bodyMedium">Read Receipts</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
                     Notify peer when messages are viewed

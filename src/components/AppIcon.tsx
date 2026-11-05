@@ -21,7 +21,12 @@ export type IconName =
   | 'chevron-up'
   | 'chevron-down'
   | 'eye'
-  | 'eye-off';
+  | 'eye-off'
+  | 'mic'
+  | 'play'
+  | 'pause'
+  | 'headphones'
+  | 'earpiece';
 
 export interface AppIconProps {
   name: IconName;
@@ -474,6 +479,155 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 borderRadius: 1,
               }}
             />
+          </View>
+        );
+
+      case 'mic':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.32,
+                height: size * 0.46,
+                borderRadius: size * 0.16,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                backgroundColor: iconColor,
+                marginBottom: size * 0.08,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                top: size * 0.16,
+                width: size * 0.54,
+                height: size * 0.38,
+                borderBottomLeftRadius: size * 0.27,
+                borderBottomRightRadius: size * 0.27,
+                borderWidth: 1.8,
+                borderTopWidth: 0,
+                borderColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.12,
+                width: 1.8,
+                height: size * 0.16,
+                backgroundColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.1,
+                width: size * 0.34,
+                height: 1.8,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+              }}
+            />
+          </View>
+        );
+
+      case 'play':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderTopWidth: size * 0.3,
+                borderBottomWidth: size * 0.3,
+                borderLeftWidth: size * 0.46,
+                borderTopColor: 'transparent',
+                borderBottomColor: 'transparent',
+                borderLeftColor: iconColor,
+                marginLeft: size * 0.1,
+              }}
+            />
+          </View>
+        );
+
+      case 'pause':
+        return (
+          <View style={[styles.center, { width: size, height: size, flexDirection: 'row', gap: size * 0.16 }]}>
+            <View style={{ width: size * 0.18, height: size * 0.54, backgroundColor: iconColor, borderRadius: 1 }} />
+            <View style={{ width: size * 0.18, height: size * 0.54, backgroundColor: iconColor, borderRadius: 1 }} />
+          </View>
+        );
+
+      case 'headphones':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.72,
+                height: size * 0.56,
+                borderTopLeftRadius: size * 0.36,
+                borderTopRightRadius: size * 0.36,
+                borderWidth: 2,
+                borderBottomWidth: 0,
+                borderColor: iconColor,
+                marginTop: -size * 0.08,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.16,
+                left: size * 0.1,
+                width: size * 0.16,
+                height: size * 0.3,
+                borderRadius: size * 0.08,
+                backgroundColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.16,
+                right: size * 0.1,
+                width: size * 0.16,
+                height: size * 0.3,
+                borderRadius: size * 0.08,
+                backgroundColor: iconColor,
+              }}
+            />
+          </View>
+        );
+
+      case 'earpiece':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.52,
+                height: size * 0.72,
+                borderTopLeftRadius: size * 0.26,
+                borderTopRightRadius: size * 0.26,
+                borderBottomLeftRadius: size * 0.2,
+                borderBottomRightRadius: size * 0.32,
+                borderWidth: 2,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.2,
+                  height: size * 0.3,
+                  borderTopRightRadius: size * 0.15,
+                  borderBottomRightRadius: size * 0.15,
+                  borderWidth: 1.6,
+                  borderLeftWidth: 0,
+                  borderColor: iconColor,
+                }}
+              />
+            </View>
           </View>
         );
 

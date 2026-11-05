@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ThemedText,
   ScreenHeader,
@@ -48,6 +49,7 @@ import {
 } from '@/lib/supabase';
 import { UserConnectionState } from '@/lib/supabase/types';
 import { DirectMessage } from '@/types';
+import { playWhisperAudio, WhisperAudioData, WhisperPlaybackSession, formatAudioDuration } from '@/lib/audio';
 
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
@@ -109,6 +111,98 @@ export default function PrivateChatScreen() {
   const [isManageConnectionModalOpen, setIsManageConnectionModalOpen] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Earpiece-Only Whispers (Zero Loudspeaker) State
+  const [activeWhisperId, setActiveWhisperId] = useState<string | null>(null);
+  const [activeWhisperData, setActiveWhisperData] = useState<WhisperAudioData | null>(null);
+  const [whisperProgress, setWhisperProgress] = useState(0);
+  const [isLoudspeakerGuardVisible, setIsLoudspeakerGuardVisible] = useState(false);
+  const [isInEarMode, setIsInEarMode] = useState(false);
+  const whisperPlaybackSessionRef = useRef<WhisperPlaybackSession | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (whisperPlaybackSessionRef.current) {
+        whisperPlaybackSessionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const handlePlayWhisper = (whisper: WhisperAudioData, messageId: string) => {
+    if (activeWhisperId === messageId) {
+      whisperPlaybackSessionRef.current?.stop();
+      whisperPlaybackSessionRef.current = null;
+      setActiveWhisperId(null);
+      setActiveWhisperData(null);
+      setWhisperProgress(0);
+      setIsInEarMode(false);
+      return;
+    }
+
+    if (whisperPlaybackSessionRef.current) {
+      whisperPlaybackSessionRef.current.stop();
+      whisperPlaybackSessionRef.current = null;
+    }
+
+    setActiveWhisperId(messageId);
+    setActiveWhisperData(whisper);
+    setWhisperProgress(0);
+
+    // ZERO LOUDSPEAKER ENFORCED: Refuse to play over open loudspeaker
+    setIsLoudspeakerGuardVisible(true);
+  };
+
+  const handleStartInEarPlayback = () => {
+    if (!activeWhisperData) return;
+    setIsLoudspeakerGuardVisible(false);
+    setIsInEarMode(true);
+
+    whisperPlaybackSessionRef.current = playWhisperAudio(
+      activeWhisperData,
+      (current, total) => {
+        setWhisperProgress(total > 0 ? current / total : 0);
+      },
+      () => {
+        setIsInEarMode(false);
+        setActiveWhisperId(null);
+        setActiveWhisperData(null);
+        setWhisperProgress(0);
+        whisperPlaybackSessionRef.current = null;
+      },
+      true
+    );
+  };
+
+  const handleStartLowVolumePlayback = () => {
+    if (!activeWhisperData) return;
+    setIsLoudspeakerGuardVisible(false);
+    setIsInEarMode(false);
+
+    whisperPlaybackSessionRef.current = playWhisperAudio(
+      activeWhisperData,
+      (current, total) => {
+        setWhisperProgress(total > 0 ? current / total : 0);
+      },
+      () => {
+        setActiveWhisperId(null);
+        setActiveWhisperData(null);
+        setWhisperProgress(0);
+        whisperPlaybackSessionRef.current = null;
+      },
+      false
+    );
+  };
+
+  const handleStopInEarPlayback = () => {
+    if (whisperPlaybackSessionRef.current) {
+      whisperPlaybackSessionRef.current.stop();
+      whisperPlaybackSessionRef.current = null;
+    }
+    setIsInEarMode(false);
+    setActiveWhisperId(null);
+    setActiveWhisperData(null);
+    setWhisperProgress(0);
+  };
 
   // Load actual peer profile if conversation is on Supabase
   useEffect(() => {
@@ -902,6 +996,9 @@ export default function PrivateChatScreen() {
                   onDoubleTap={() => handleDoubleTapMessage(item)}
                   searchKeyword={isSearchActive ? searchQuery : undefined}
                   isPrivacyLensActive={isPrivacyLensEnabled && !isDecoy}
+                  onPlayWhisper={(whisper) => handlePlayWhisper(whisper, item.id)}
+                  isPlayingWhisper={activeWhisperId === item.id}
+                  whisperProgress={activeWhisperId === item.id ? whisperProgress : 0}
                 />
               )}
               contentContainerStyle={[
@@ -1771,6 +1868,162 @@ export default function PrivateChatScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Zero Loudspeaker Guard Modal */}
+      <Modal
+        visible={isLoudspeakerGuardVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setIsLoudspeakerGuardVisible(false);
+          setActiveWhisperId(null);
+          setActiveWhisperData(null);
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            setIsLoudspeakerGuardVisible(false);
+            setActiveWhisperId(null);
+            setActiveWhisperData(null);
+          }}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: '#12101B',
+                borderColor: 'rgba(168, 85, 247, 0.45)',
+                borderRadius: 20,
+                padding: spacing.lg,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Security Header */}
+            <View style={styles.whisperGuardHeader}>
+              <View style={styles.whisperGuardIconBubble}>
+                <AppIcon name="lock" size={20} color="#E9D5FF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={styles.whisperGuardTag}>
+                  <ThemedText style={styles.whisperGuardTagText}>ZERO LOUDSPEAKER ENFORCED</ThemedText>
+                </View>
+                <ThemedText variant="h3" style={{ fontSize: 17, color: '#FFFFFF', marginTop: 3 }}>
+                  Earpiece-Only Whisper
+                </ThemedText>
+              </View>
+            </View>
+
+            {/* Safety Explanation */}
+            <View style={styles.whisperGuardExplainBox}>
+              <ThemedText variant="caption" style={styles.whisperGuardExplainText}>
+                This voice note physically refuses to play over the open loudspeaker to ensure zero eavesdropping in public places.
+              </ThemedText>
+            </View>
+
+            {/* Primary Action: In-Ear Private Mode */}
+            <Pressable
+              onPress={handleStartInEarPlayback}
+              style={styles.whisperGuardPrimaryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Listen in private in-ear mode"
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#6D28D9']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.whisperGuardBtnContent}>
+                <AppIcon name="headphones" size={20} color="#FFFFFF" />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <ThemedText style={styles.whisperGuardBtnTitle}>
+                    Listen in Private In-Ear Mode
+                  </ThemedText>
+                  <ThemedText style={styles.whisperGuardBtnSubtitle}>
+                    Screen dims black • Hold phone to ear • Telephony filter
+                  </ThemedText>
+                </View>
+              </View>
+            </Pressable>
+
+            {/* Secondary Action: Low Volume (I'm Alone) */}
+            <Pressable
+              onPress={handleStartLowVolumePlayback}
+              style={styles.whisperGuardSecondaryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Play at low volume"
+            >
+              <AppIcon name="play" size={14} color="#C084FC" />
+              <ThemedText style={styles.whisperGuardSecondaryText}>
+                {"Play at Low Volume (I'm in Private)"}
+              </ThemedText>
+            </Pressable>
+
+            {/* Cancel Button */}
+            <Pressable
+              onPress={() => {
+                setIsLoudspeakerGuardVisible(false);
+                setActiveWhisperId(null);
+                setActiveWhisperData(null);
+              }}
+              style={styles.whisperGuardCancelBtn}
+            >
+              <ThemedText style={styles.whisperGuardCancelText}>Cancel</ThemedText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* In-Ear Proximity Blackout Screen */}
+      {isInEarMode ? (
+        <Pressable
+          onPress={handleStopInEarPlayback}
+          style={styles.inEarProximityOverlay}
+          accessibilityRole="button"
+          accessibilityLabel="Stop in-ear whisper playback"
+        >
+          <View style={styles.inEarContentCenter}>
+            <View style={styles.inEarIconPulseContainer}>
+              <View style={styles.inEarIconGlowRing} />
+              <View style={styles.inEarIconCircle}>
+                <AppIcon name="earpiece" size={38} color="#C084FC" />
+              </View>
+            </View>
+
+            <ThemedText variant="h3" style={styles.inEarTitle}>
+              Private Earpiece Active
+            </ThemedText>
+
+            <ThemedText variant="caption" tone="secondary" style={styles.inEarSubtitle}>
+              Audio routed through private earpiece filter.
+            </ThemedText>
+
+            {/* Progress track */}
+            <View style={styles.inEarProgressTrack}>
+              <View
+                style={[
+                  styles.inEarProgressBar,
+                  { width: `${Math.round(whisperProgress * 100)}%` },
+                ]}
+              />
+            </View>
+
+            <ThemedText variant="label" style={styles.inEarTimerText}>
+              {activeWhisperData
+                ? `${formatAudioDuration(whisperProgress * activeWhisperData.duration)} / ${formatAudioDuration(activeWhisperData.duration)}`
+                : ''}
+            </ThemedText>
+
+            <View style={styles.inEarDismissHintBox}>
+              <ThemedText variant="caption" style={styles.inEarDismissHint}>
+                Tap anywhere on screen to stop & restore chat
+              </ThemedText>
+            </View>
+          </View>
+        </Pressable>
+      ) : null}
     </AuroraBackground>
   );
 }
@@ -1994,6 +2247,186 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
+  },
+  whisperGuardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  whisperGuardIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whisperGuardTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  whisperGuardTagText: {
+    color: '#F87171',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  whisperGuardExplainBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  whisperGuardExplainText: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    lineHeight: 18,
+    fontSize: 13,
+  },
+  whisperGuardPrimaryBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  whisperGuardBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  whisperGuardBtnTitle: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  whisperGuardBtnSubtitle: {
+    color: 'rgba(233, 213, 255, 0.8)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  whisperGuardSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.25)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  whisperGuardSecondaryText: {
+    color: '#C084FC',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  whisperGuardCancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  whisperGuardCancelText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 13,
+  },
+  inEarProximityOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#040307',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inEarContentCenter: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    width: '100%',
+    maxWidth: 380,
+  },
+  inEarIconPulseContainer: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  inEarIconGlowRing: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  inEarIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#1C152E',
+    borderWidth: 1.5,
+    borderColor: '#A855F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inEarTitle: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  inEarSubtitle: {
+    color: 'rgba(233, 213, 255, 0.65)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  inEarProgressTrack: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  inEarProgressBar: {
+    height: '100%',
+    backgroundColor: '#A855F7',
+    borderRadius: 2,
+  },
+  inEarTimerText: {
+    color: '#E9D5FF',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 36,
+  },
+  inEarDismissHintBox: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  inEarDismissHint: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
   },
 });
 

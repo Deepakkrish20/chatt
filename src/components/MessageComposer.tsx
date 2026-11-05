@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
+import { createWhisperRecorder, formatWhisperMessage, formatAudioDuration, WhisperRecorder } from '@/lib/audio';
 
 export interface MessageComposerProps {
   onSendMessage?: (content: string) => void;
@@ -15,13 +16,18 @@ export interface MessageComposerProps {
 export function MessageComposer({
   onSendMessage,
   onTyping,
-  placeholder = 'Message…',
+  placeholder = 'Message or Whisper…',
   disabled = false,
   bottomInset = 0,
 }: MessageComposerProps) {
   const { colors, typography } = useAppTheme();
   const [text, setText] = useState('');
   const [buttonScale] = useState(() => new Animated.Value(1));
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [liveWaveform, setLiveWaveform] = useState<number[]>([0.3, 0.6, 0.4, 0.8, 0.5]);
+  const [pulseAnim] = useState(() => new Animated.Value(1));
+  const recorderRef = useRef<WhisperRecorder | null>(null);
   const useNativeDriver = Platform.OS !== 'web';
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -30,8 +36,37 @@ export function MessageComposer({
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+      if (recorderRef.current) {
+        recorderRef.current.cancel();
+      }
     };
   }, []);
+
+  useEffect(() => {
+    let anim: Animated.CompositeAnimation | null = null;
+    if (isRecording) {
+      anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.3,
+            duration: 500,
+            useNativeDriver,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver,
+          }),
+        ])
+      );
+      anim.start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+    return () => {
+      anim?.stop();
+    };
+  }, [isRecording, pulseAnim, useNativeDriver]);
 
   const handleTextChange = (newText: string) => {
     setText(newText);
@@ -67,6 +102,46 @@ export function MessageComposer({
     setText('');
   };
 
+  const handleStartRecording = async () => {
+    if (disabled) return;
+    try {
+      recorderRef.current = createWhisperRecorder((duration, waveform) => {
+        setRecordDuration(duration);
+        setLiveWaveform([...waveform]);
+      });
+      await recorderRef.current.start();
+      setIsRecording(true);
+      setRecordDuration(0);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleCancelRecording = () => {
+    if (recorderRef.current) {
+      recorderRef.current.cancel();
+      recorderRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordDuration(0);
+  };
+
+  const handleSendWhisper = async () => {
+    if (!recorderRef.current || disabled) return;
+    try {
+      const whisperData = await recorderRef.current.stop();
+      recorderRef.current = null;
+      setIsRecording(false);
+      setRecordDuration(0);
+      if (whisperData && whisperData.duration >= 0.5) {
+        onSendMessage?.(formatWhisperMessage(whisperData));
+      }
+    } catch {
+      setIsRecording(false);
+      setRecordDuration(0);
+    }
+  };
+
   const handlePressIn = () => {
     if (disabled) return;
     Animated.timing(buttonScale, {
@@ -94,7 +169,7 @@ export function MessageComposer({
     }
   };
 
-  const canSend = Boolean(text.trim()) && !disabled;
+  const hasText = Boolean(text.trim());
 
   return (
     <View
@@ -108,71 +183,128 @@ export function MessageComposer({
       ]}
     >
       <View style={styles.composerRow}>
-        {/* Aurora Dark Message Input Capsule */}
-        <View
-          style={[
-            styles.inputCapsule,
-            {
-              backgroundColor: '#181822',
-              borderColor: '#2A273C',
-            },
-          ]}
-        >
-          <TextInput
-            value={text}
-            onChangeText={handleTextChange}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            editable={!disabled}
-            multiline
-            textAlignVertical="center"
-            autoCorrect={true}
-            spellCheck={true}
-            autoCapitalize="sentences"
-            keyboardType="default"
-            returnKeyType="default"
-            disableFullscreenUI={true}
-            autoComplete="off"
-            textContentType="none"
-            importantForAutofill="no"
-            onKeyPress={handleKeyPress}
+        {isRecording ? (
+          /* Whisper Recording Active Capsule */
+          <View style={[styles.inputCapsule, styles.recordingCapsule]}>
+            <Pressable
+              onPress={handleCancelRecording}
+              hitSlop={10}
+              style={styles.cancelRecordButton}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel whisper recording"
+            >
+              <AppIcon name="trash" size={18} color="#EF4444" />
+            </Pressable>
+
+            <View style={styles.recordLiveIndicator}>
+              <Animated.View
+                style={[
+                  styles.redDot,
+                  { opacity: pulseAnim },
+                ]}
+              />
+              <Text style={styles.recordTimerText}>
+                {formatAudioDuration(recordDuration)}
+              </Text>
+            </View>
+
+            {/* Live animated waveform visualizer bars */}
+            <View style={styles.waveformContainer}>
+              {liveWaveform.slice(-14).map((val, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.waveformBar,
+                    {
+                      height: Math.max(5, Math.min(26, Math.round(val * 28))),
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        ) : (
+          /* Aurora Dark Message Input Capsule */
+          <View
             style={[
-              typography.body,
-              styles.input,
-              { color: disabled ? colors.textMuted : '#FFFFFF' },
+              styles.inputCapsule,
+              {
+                backgroundColor: '#181822',
+                borderColor: '#2A273C',
+              },
             ]}
-          />
-        </View>
+          >
+            <TextInput
+              value={text}
+              onChangeText={handleTextChange}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              editable={!disabled}
+              multiline
+              textAlignVertical="center"
+              autoCorrect={true}
+              spellCheck={true}
+              autoCapitalize="sentences"
+              keyboardType="default"
+              returnKeyType="default"
+              disableFullscreenUI={true}
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              onKeyPress={handleKeyPress}
+              style={[
+                typography.body,
+                styles.input,
+                { color: disabled ? colors.textMuted : '#FFFFFF' },
+              ]}
+            />
+          </View>
+        )}
 
         {/* Aurora Glowing Circular Action FAB */}
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
-            disabled={!canSend}
+            disabled={disabled}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            onPress={handleSend}
+            onPress={
+              isRecording
+                ? handleSendWhisper
+                : hasText
+                ? handleSend
+                : handleStartRecording
+            }
             style={({ pressed }) => [
               styles.sendFab,
-              canSend ? styles.sendFabActive : styles.sendFabInactive,
+              isRecording || hasText || !disabled ? styles.sendFabActive : styles.sendFabInactive,
               { opacity: pressed ? 0.85 : 1 },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Send message"
-            accessibilityState={{ disabled: !canSend }}
+            accessibilityLabel={
+              isRecording
+                ? 'Send whisper'
+                : hasText
+                ? 'Send message'
+                : 'Record whisper voice note'
+            }
           >
-            {canSend ? (
-              <LinearGradient
-                colors={['#A855F7', '#7C3AED']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            ) : null}
+            <LinearGradient
+              colors={
+                isRecording
+                  ? ['#10B981', '#059669']
+                  : hasText
+                  ? ['#A855F7', '#7C3AED']
+                  : ['#9333EA', '#6B21A8']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
 
             <AppIcon
-              name="send"
+              name={isRecording ? 'send' : hasText ? 'send' : 'mic'}
               size={18}
-              color={canSend ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)'}
+              color="#FFFFFF"
             />
           </Pressable>
         </Animated.View>
@@ -203,6 +335,51 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingHorizontal: 16,
     paddingVertical: 4,
+  },
+  recordingCapsule: {
+    backgroundColor: '#151320',
+    borderColor: '#7C3AED',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  cancelRecordButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordLiveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  recordTimerText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+  },
+  waveformContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 3,
+    paddingRight: 4,
+    height: 30,
+  },
+  waveformBar: {
+    width: 3,
+    backgroundColor: '#C084FC',
+    borderRadius: 2,
   },
   input: {
     flex: 1,

@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
+import { parseWhisperMessage, formatAudioDuration, WhisperAudioData } from '@/lib/audio';
 
 export interface MessageBubbleProps {
   message: DirectMessage;
@@ -12,6 +13,9 @@ export interface MessageBubbleProps {
   onDoubleTap?: () => void;
   searchKeyword?: string;
   isPrivacyLensActive?: boolean;
+  onPlayWhisper?: (whisper: WhisperAudioData) => void;
+  isPlayingWhisper?: boolean;
+  whisperProgress?: number;
 }
 
 export function MessageBubble({
@@ -21,6 +25,9 @@ export function MessageBubble({
   onDoubleTap,
   searchKeyword,
   isPrivacyLensActive = false,
+  onPlayWhisper,
+  isPlayingWhisper = false,
+  whisperProgress = 0,
 }: MessageBubbleProps) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const isOutgoing = message.isOutgoing;
@@ -32,6 +39,11 @@ export function MessageBubble({
   const [slideAnim] = useState(() => new Animated.Value(animate ? 8 : 0));
   const [isRevealed, setIsRevealed] = useState(false);
   const [revealAnim] = useState(() => new Animated.Value(0));
+
+  const whisperData = useMemo(() => {
+    if (isDeleted) return null;
+    return parseWhisperMessage(message.content);
+  }, [message.content, isDeleted]);
 
   useEffect(() => {
     if (animate) {
@@ -166,6 +178,7 @@ export function MessageBubble({
               borderBottomRightRadius: isOutgoing ? 4 : 18,
               opacity: pressed && !isPrivacyLensActive && (onLongPress || onDoubleTap) ? 0.8 : 1,
               overflow: 'hidden',
+              minWidth: whisperData ? 225 : undefined,
             },
             isOutgoing
               ? {
@@ -204,30 +217,117 @@ export function MessageBubble({
             </View>
           ) : (
             <View style={{ position: 'relative' }}>
-              <Animated.Text
-                style={[
-                  typography.body,
-                  {
-                    color: '#FFFFFF',
-                    fontSize: 15,
-                    lineHeight: 20,
-                    opacity: isPrivacyLensActive
-                      ? revealAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.08, 1],
-                        })
-                      : 1,
-                    ...(isPrivacyLensActive && Platform.OS === 'web'
-                      ? ({
-                          filter: isRevealed ? 'none' : 'blur(8px)',
-                          userSelect: isRevealed ? 'text' : 'none',
-                        } as any)
-                      : {}),
-                  },
-                ]}
-              >
-                {renderContent()}
-              </Animated.Text>
+              {whisperData ? (
+                <Animated.View
+                  style={[
+                    styles.whisperCard,
+                    {
+                      opacity: isPrivacyLensActive
+                        ? revealAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.08, 1],
+                          })
+                        : 1,
+                      ...(isPrivacyLensActive && Platform.OS === 'web'
+                        ? ({
+                            filter: isRevealed ? 'none' : 'blur(8px)',
+                            userSelect: isRevealed ? 'text' : 'none',
+                          } as any)
+                        : {}),
+                    },
+                  ]}
+                >
+                  {/* Whisper Security Bar */}
+                  <View style={styles.whisperBadgeRow}>
+                    <View style={styles.whisperLockPill}>
+                      <AppIcon name="lock" size={9} color="#E9D5FF" />
+                      <Text style={styles.whisperLockText}>EARPIECE ONLY</Text>
+                    </View>
+                    <View style={styles.whisperAcousticPill}>
+                      <AppIcon name="headphones" size={11} color="rgba(233, 213, 255, 0.75)" />
+                    </View>
+                  </View>
+
+                  {/* Player Row */}
+                  <View style={styles.whisperControlRow}>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        if (onPlayWhisper && whisperData) {
+                          onPlayWhisper(whisperData);
+                        }
+                      }}
+                      hitSlop={6}
+                      style={styles.whisperPlayBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={isPlayingWhisper ? 'Pause whisper' : 'Play earpiece whisper'}
+                    >
+                      <LinearGradient
+                        colors={isPlayingWhisper ? ['#10B981', '#059669'] : ['#A855F7', '#6D28D9']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <AppIcon
+                        name={isPlayingWhisper ? 'pause' : 'play'}
+                        size={13}
+                        color="#FFFFFF"
+                      />
+                    </Pressable>
+
+                    {/* Waveform dynamic visualization */}
+                    <View style={styles.whisperWaveformRow}>
+                      {whisperData.waveform.map((barVal, idx) => {
+                        const ratio = idx / whisperData.waveform.length;
+                        const isPlayed = isPlayingWhisper && (whisperProgress || 0) >= ratio;
+                        return (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.whisperWaveBar,
+                              {
+                                height: Math.max(5, Math.min(26, Math.round(barVal * 28))),
+                                backgroundColor: isPlayed ? '#38BDF8' : 'rgba(233, 213, 255, 0.45)',
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+
+                    <Text style={styles.whisperTimerText}>
+                      {isPlayingWhisper && (whisperProgress || 0) > 0
+                        ? formatAudioDuration((whisperProgress || 0) * whisperData.duration)
+                        : formatAudioDuration(whisperData.duration)}
+                    </Text>
+                  </View>
+                </Animated.View>
+              ) : (
+                <Animated.Text
+                  style={[
+                    typography.body,
+                    {
+                      color: '#FFFFFF',
+                      fontSize: 15,
+                      lineHeight: 20,
+                      opacity: isPrivacyLensActive
+                        ? revealAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.08, 1],
+                          })
+                        : 1,
+                      ...(isPrivacyLensActive && Platform.OS === 'web'
+                        ? ({
+                            filter: isRevealed ? 'none' : 'blur(8px)',
+                            userSelect: isRevealed ? 'text' : 'none',
+                          } as any)
+                        : {}),
+                    },
+                  ]}
+                >
+                  {renderContent()}
+                </Animated.Text>
+              )}
 
               {/* Frosted Privacy Lens Overlay */}
               {isPrivacyLensActive ? (
@@ -353,6 +453,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 2,
     elevation: 1,
+  },
+  whisperCard: {
+    paddingVertical: 2,
+    gap: 6,
+  },
+  whisperBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 2,
+  },
+  whisperLockPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(233, 213, 255, 0.3)',
+  },
+  whisperLockText: {
+    color: '#E9D5FF',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  whisperAcousticPill: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  whisperControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whisperPlayBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  whisperWaveformRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    height: 30,
+  },
+  whisperWaveBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  whisperTimerText: {
+    color: '#E9D5FF',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    minWidth: 28,
+    textAlign: 'right',
   },
   deletedContainer: {
     flexDirection: 'row',

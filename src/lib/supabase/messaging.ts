@@ -19,6 +19,7 @@ import {
 import { DirectConversationPreview, DirectMessage, MessageReaction } from '@/types';
 import { formatConversationTime, formatMessageTime } from '@/utils';
 import { NETWORK_ACCOUNTS } from '@/data/mockData';
+import { isWhisperMessage, parseWhisperMessage, formatAudioDuration } from '@/lib/audio';
 
 const STORAGE_MESSAGES_KEY_PREFIX = '@chatt_msg_history_';
 const STORAGE_CONVERSATIONS_KEY = '@chatt_conversations_index';
@@ -125,11 +126,15 @@ async function updateConversationSummaryLocally(
     const raw = await AsyncStorage.getItem(storageKey);
     const list: DirectConversationPreview[] = raw ? JSON.parse(raw) : [];
 
+    const snippet = isWhisperMessage(lastMessage.content)
+      ? `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(lastMessage.content)?.duration || 0)})`
+      : lastMessage.content;
+
     const existingIndex = list.findIndex((c) => c.id === conversationId);
     if (existingIndex >= 0) {
       list[existingIndex] = {
         ...list[existingIndex],
-        lastMessageSnippet: lastMessage.content,
+        lastMessageSnippet: snippet,
         lastMessageTimestamp: lastMessage.createdAt,
       };
     } else {
@@ -148,7 +153,7 @@ async function updateConversationSummaryLocally(
         participantName: resolvedName,
         participantUsername: resolvedName.toLowerCase().replace(/\s+/g, ''),
         isOnline: true,
-        lastMessageSnippet: lastMessage.content,
+        lastMessageSnippet: snippet,
         lastMessageTimestamp: lastMessage.createdAt,
         unreadCount: 0,
       });
@@ -287,13 +292,18 @@ export async function fetchConversations(
             const otherId = c.user1_id === currentUserId ? c.user2_id : c.user1_id;
             const profile = profileMap.get(otherId);
 
+            const rawSnippet = c.last_message_text || 'No messages yet.';
+            const displaySnippet = isWhisperMessage(rawSnippet)
+              ? `🔒 Whisper (${formatAudioDuration(parseWhisperMessage(rawSnippet)?.duration || 0)})`
+              : rawSnippet;
+
             return {
               id: c.id,
               participantId: otherId,
               participantName: profile?.displayName || 'Chat Partner',
               participantUsername: profile?.username || 'member',
               isOnline: profile?.isOnline ?? true,
-              lastMessageSnippet: c.last_message_text || 'No messages yet.',
+              lastMessageSnippet: displaySnippet,
               lastMessageTimestamp: c.last_message_at
                 ? formatConversationTime(c.last_message_at)
                 : formatConversationTime(c.created_at),
