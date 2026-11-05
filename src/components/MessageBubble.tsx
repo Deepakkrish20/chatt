@@ -138,18 +138,19 @@ export function MessageBubble({
               });
             }
           }}
-          onLongPress={onLongPress}
-          delayLongPress={280}
+          onLongPress={isPrivacyLensActive ? undefined : onLongPress}
+          delayLongPress={550}
           accessibilityRole="button"
-          accessibilityHint="Double tap to react, hold to reveal message, long press to manage"
+          accessibilityHint={
+            isPrivacyLensActive
+              ? "Hold to reveal message text, double tap to react"
+              : "Double tap to react, long press to manage"
+          }
           {...(Platform.OS === 'web'
             ? ({
                 onContextMenu: (e: any) => {
                   e?.preventDefault?.();
                   onLongPress?.();
-                },
-                onDoubleClick: () => {
-                  onDoubleTap?.();
                 },
               } as any)
             : {})}
@@ -163,7 +164,7 @@ export function MessageBubble({
               borderTopRightRadius: 18,
               borderBottomLeftRadius: 18,
               borderBottomRightRadius: isOutgoing ? 4 : 18,
-              opacity: pressed && (onLongPress || onDoubleTap) ? 0.8 : 1,
+              opacity: pressed && !isPrivacyLensActive && (onLongPress || onDoubleTap) ? 0.8 : 1,
               overflow: 'hidden',
             },
             isOutgoing
@@ -254,9 +255,8 @@ export function MessageBubble({
                     end={{ x: 1, y: 1 }}
                     style={StyleSheet.absoluteFill}
                   />
-                  <View style={styles.privacyContentRow}>
-                    <AppIcon name="eye-off" size={11} color="#E9D5FF" />
-                    <Text style={styles.privacyBadgeText}>Hold to reveal</Text>
+                  <View style={styles.privacyEyeBadge}>
+                    <AppIcon name="eye-off" size={15} color="#E9D5FF" />
                   </View>
                 </Animated.View>
               ) : null}
@@ -414,22 +414,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  privacyContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  privacyEyeBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.35)',
-  },
-  privacyBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#E9D5FF',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
