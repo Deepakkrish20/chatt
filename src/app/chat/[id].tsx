@@ -35,6 +35,7 @@ import {
   markConversationAsRead,
   deleteMessageForEveryone,
   deleteMessageForMe,
+  clearChatForMe,
   isMessageWithinOneHour,
   getRemainingDeleteTime,
   toggleMessageReaction,
@@ -111,6 +112,24 @@ export default function PrivateChatScreen() {
   const [isManageConnectionModalOpen, setIsManageConnectionModalOpen] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [showClearChatConfirm, setShowClearChatConfirm] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+
+  const handleClearChat = async () => {
+    if (isDecoy) {
+      setMessages([]);
+      setShowClearChatConfirm(false);
+      return;
+    }
+
+    setIsClearingChat(true);
+    const res = await clearChatForMe(conversationId, currentUserId);
+    setIsClearingChat(false);
+    setShowClearChatConfirm(false);
+    if (res.success) {
+      setMessages([]);
+    }
+  };
 
   // Earpiece-Only Whispers (Zero Loudspeaker) State
   const [activeWhisperId, setActiveWhisperId] = useState<string | null>(null);
@@ -1735,6 +1754,20 @@ export default function PrivateChatScreen() {
             {connectionStatus === 'accepted' ? (
               <View style={{ gap: spacing.sm }}>
                 <AppButton
+                  title="Clear Chat (My Side Only)"
+                  variant="outline"
+                  onPress={() => {
+                    setIsManageConnectionModalOpen(false);
+                    setShowClearChatConfirm(true);
+                  }}
+                />
+                <ThemedText variant="caption" tone="muted" style={{ textAlign: 'center', lineHeight: 16 }}>
+                  Permanently deletes all messages on your device. {participantName} keeps their copy intact.
+                </ThemedText>
+
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255, 255, 255, 0.12)', marginVertical: 4 }} />
+
+                <AppButton
                   title="Disconnect Connection"
                   variant="outline"
                   loading={isDisconnecting}
@@ -1862,6 +1895,97 @@ export default function PrivateChatScreen() {
                     setIsDisconnecting(false);
                     setShowDisconnectConfirm(false);
                   }}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Clear Chat Confirmation Modal (Option B: One-Sided Shred) */}
+      <Modal
+        visible={showClearChatConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isClearingChat) setShowClearChatConfirm(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => {
+            if (!isClearingChat) setShowClearChatConfirm(false);
+          }}
+        >
+          <Pressable
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: '#181822',
+                borderColor: 'rgba(239, 68, 68, 0.4)',
+                padding: spacing.lg,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.md }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <AppIcon name="trash" size={20} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText variant="h3" style={{ fontSize: 17, color: '#FFFFFF' }}>
+                  Clear Chat?
+                </ThemedText>
+                <ThemedText variant="caption" tone="secondary">
+                  One-Sided Shred (Your Side Only)
+                </ThemedText>
+              </View>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderColor: 'rgba(255, 255, 255, 0.08)',
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: spacing.lg,
+              }}
+            >
+              <ThemedText variant="caption" style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 18 }}>
+                This will permanently delete all messages, whispers, and media from this conversation on your phone.
+              </ThemedText>
+              <ThemedText variant="caption" style={{ color: '#C084FC', marginTop: 8, fontWeight: '600' }}>
+                ✓ {participantName} will keep their copy of the conversation intact.
+              </ThemedText>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  title="Cancel"
+                  variant="outline"
+                  disabled={isClearingChat}
+                  onPress={() => setShowClearChatConfirm(false)}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  title={isClearingChat ? 'Clearing…' : 'Clear Chat'}
+                  variant="primary"
+                  loading={isClearingChat}
+                  onPress={handleClearChat}
                 />
               </View>
             </View>

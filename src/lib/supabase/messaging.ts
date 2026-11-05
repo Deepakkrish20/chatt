@@ -433,6 +433,17 @@ export async function fetchMessages(
 ): Promise<DirectMessage[]> {
   const canonicalId = conversationId;
 
+  const clearKey = `@chatt_cleared_at_${canonicalId}_${currentUserId}`;
+  let clearedAt = 0;
+  try {
+    const rawCleared = await AsyncStorage.getItem(clearKey);
+    if (rawCleared) {
+      clearedAt = parseInt(rawCleared, 10) || 0;
+    }
+  } catch {
+    // Ignore storage read error
+  }
+
   let localMessages: DirectMessage[] = [];
 
   // 1. Retrieve persistent local messages from storage
@@ -456,7 +467,7 @@ export async function fetchMessages(
         .limit(limit);
 
       if (!error && data && data.length > 0) {
-        const dbMessages = (data as DatabaseMessage[]).map((m) => ({
+        let dbMessages = (data as DatabaseMessage[]).map((m) => ({
           id: m.id,
           conversationId: m.conversation_id,
           senderId: m.sender_id,
@@ -467,6 +478,13 @@ export async function fetchMessages(
           status: (m.read_at ? 'read' : 'delivered') as 'read' | 'delivered',
         }));
 
+        if (clearedAt > 0) {
+          dbMessages = dbMessages.filter((m) => {
+            const time = new Date(m.createdAt || 0).getTime();
+            return !time || time > clearedAt;
+          });
+        }
+
         // Merge DB messages into local storage
         await mergeMessagesToLocalHistory(canonicalId, dbMessages);
         return dbMessages;
@@ -476,10 +494,15 @@ export async function fetchMessages(
     }
   }
 
-  // Map isOutgoing dynamically based on current user & filter deleted for me
-  const visibleMessages = localMessages.filter(
-    (m) => !m.deletedForUsers || !m.deletedForUsers.includes(currentUserId)
-  );
+  // Map isOutgoing dynamically based on current user & filter deleted for me / cleared
+  const visibleMessages = localMessages.filter((m) => {
+    if (m.deletedForUsers && m.deletedForUsers.includes(currentUserId)) return false;
+    if (clearedAt > 0) {
+      const msgTime = m.timestamp || (m.id.startsWith('msg_') ? parseInt(m.id.split('_')[1], 10) : 0);
+      if (msgTime && msgTime <= clearedAt) return false;
+    }
+    return true;
+  });
 
   return visibleMessages.map((m) => ({
     ...m,
@@ -652,6 +675,65 @@ export async function deleteMessageForMe(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to delete message for me.',
+    };
+  }
+}
+
+/**
+ * Clear Chat (Burn My Side Only):
+ * Permanently removes all messages in this conversation from the current user's device and view.
+ * The other participant keeps their copy intact.
+ */
+export async function clearChatForMe(
+  conversationId: string,
+  currentUserId: string
+): Promise<{ success: boolean; error: string | null }> {
+  const canonicalId = conversationId;
+
+  try {
+    const now = Date.now();
+    // 1. Set cleared timestamp for current user
+    const clearKey = `@chatt_cleared_at_${canonicalId}_${currentUserId}`;
+    await AsyncStorage.setItem(clearKey, now.toString());
+
+    // 2. Mark all existing local messages as deleted for current user
+    const key = STORAGE_MESSAGES_KEY_PREFIX + canonicalId;
+    const raw = await AsyncStorage.getItem(key);
+    if (raw) {
+      const list: DirectMessage[] = JSON.parse(raw);
+      const updatedList = list.map((m) => {
+        const existing = m.deletedForUsers || [];
+        if (!existing.includes(currentUserId)) {
+          return {
+            ...m,
+            deletedForUsers: [...existing, currentUserId],
+          };
+        }
+        return m;
+      });
+      await AsyncStorage.setItem(key, JSON.stringify(updatedList));
+    }
+
+    // 3. Update conversation preview summary
+    const storageKey = getConversationsStorageKey(currentUserId);
+    const rawConv = await AsyncStorage.getItem(storageKey);
+    if (rawConv) {
+      const convList: DirectConversationPreview[] = JSON.parse(rawConv);
+      const idx = convList.findIndex((c) => c.id === canonicalId);
+      if (idx >= 0) {
+        convList[idx] = {
+          ...convList[idx],
+          lastMessageSnippet: 'Chat cleared',
+        };
+        await AsyncStorage.setItem(storageKey, JSON.stringify(convList));
+      }
+    }
+
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to clear chat.',
     };
   }
 }
