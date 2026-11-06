@@ -50,7 +50,8 @@ import {
 } from '@/lib/supabase';
 import { UserConnectionState } from '@/lib/supabase/types';
 import { DirectMessage } from '@/types';
-import { playWhisperAudio, WhisperAudioData, WhisperPlaybackSession, formatAudioDuration } from '@/lib/audio';
+import { playWhisperAudio, isWhisperMessage, WhisperAudioData, WhisperPlaybackSession, formatAudioDuration } from '@/lib/audio';
+import { isCapsuleMessage, parseCapsuleMessage, isCapsuleUnlocked } from '@/lib/capsule';
 
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
@@ -340,7 +341,29 @@ export default function PrivateChatScreen() {
     if (!q) return [];
     const indices: number[] = [];
     messages.forEach((m, idx) => {
-      if (!m.isDeletedForEveryone && m.content.toLowerCase().includes(q)) {
+      if (m.isDeletedForEveryone) return;
+      if (isCapsuleMessage(m.content)) {
+        const cap = parseCapsuleMessage(m.content);
+        if (cap) {
+          if (!isCapsuleUnlocked(cap)) {
+            if (cap.title && cap.title.toLowerCase().includes(q)) {
+              indices.push(idx);
+            }
+            return;
+          }
+          if (cap.ciphertext.toLowerCase().includes(q) || (cap.title && cap.title.toLowerCase().includes(q))) {
+            indices.push(idx);
+          }
+          return;
+        }
+      }
+      if (isWhisperMessage(m.content)) {
+        if ('whisper'.includes(q) || 'voice note'.includes(q)) {
+          indices.push(idx);
+        }
+        return;
+      }
+      if (m.content.toLowerCase().includes(q)) {
         indices.push(idx);
       }
     });
@@ -1297,7 +1320,13 @@ export default function PrivateChatScreen() {
                   numberOfLines={2}
                   style={{ fontStyle: 'italic' }}
                 >
-                  {`"${selectedMessage.content}"`}
+                  {`"${
+                    isWhisperMessage(selectedMessage.content)
+                      ? '🔒 Whisper Voice Note'
+                      : isCapsuleMessage(selectedMessage.content)
+                      ? `⏳ Memory Capsule${parseCapsuleMessage(selectedMessage.content)?.title ? `: ${parseCapsuleMessage(selectedMessage.content)?.title}` : ''}`
+                      : selectedMessage.content
+                  }"`}
                 </ThemedText>
                 <ThemedText
                   variant="label"
