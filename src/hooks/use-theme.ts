@@ -1,15 +1,18 @@
-import { theme, AppTheme, ColorPalette } from '@/theme';
+import { useAppTheme as useThemeFromContext, AppTheme } from '@/context/ThemeContext';
+import { ColorPalette } from '@/theme/colors';
+
+export { ThemeProvider, type AppTheme } from '@/context/ThemeContext';
 
 /**
- * Access the centralized Raw Black theme.
+ * Access the centralized dynamic theme (Light or Dark OLED).
  */
 export function useAppTheme(): AppTheme {
-  return theme;
+  return useThemeFromContext();
 }
 
 /**
  * Convenience hook to access theme colors directly.
  */
 export function useTheme(): ColorPalette {
-  return theme.colors;
+  return useThemeFromContext().colors;
 }

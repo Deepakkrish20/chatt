@@ -16,13 +16,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ThemedText,
-  ScreenHeader,
   AppAvatar,
   MessageBubble,
   MessageComposer,
   AppIcon,
   AppButton,
-  AuroraBackground,
+  CurvedWaveHeader,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -56,7 +55,7 @@ import { isCapsuleMessage, parseCapsuleMessage, isCapsuleUnlocked } from '@/lib/
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
 export default function PrivateChatScreen() {
-  const { colors, spacing, radius, typography } = useAppTheme();
+  const { colors, spacing, radius, typography, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const { user, profile, recordActivity } = useAuth();
@@ -754,102 +753,130 @@ export default function PrivateChatScreen() {
       : '';
 
   return (
-    <AuroraBackground style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        {/* Contact Header */}
-        <ScreenHeader
-          title={participantName}
-          subtitle={
-            isPeerTyping
-              ? 'Typing…'
-              : isOnline
-              ? 'Online'
-              : 'Direct Channel'
-          }
-          subtitleColor={isOnline ? '#C084FC' : undefined}
-          showBack
-          onBack={() => router.back()}
-          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
-          rightElement={
-            <View style={styles.headerRightGroup}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Signature Curved Midnight Navy Header (Exact match with Screen 3) */}
+      <CurvedWaveHeader variant="chatRoom">
+        <View style={styles.chatRoomHeaderInner}>
+          {/* Left: Back Arrow + Avatar + Name & Online Dot */}
+          <View style={styles.headerLeftGroup}>
+            <Pressable
+              hitSlop={12}
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <AppIcon name="back" size={20} color="#FFFFFF" />
+            </Pressable>
+
+            <AppAvatar
+              name={participantName}
+              size="sm"
+              isOnline={isOnline}
+              style={{ marginLeft: 4, marginRight: 10 }}
+            />
+
+            <View style={styles.peerTextGroup}>
+              <ThemedText variant="bodySemibold" numberOfLines={1} style={styles.peerNameText}>
+                {participantName}
+              </ThemedText>
+              <View style={styles.peerStatusRow}>
+                {isOnline ? <View style={styles.statusDotGreen} /> : null}
+                <ThemedText variant="caption" style={styles.peerStatusText}>
+                  {isPeerTyping
+                    ? 'Typing…'
+                    : isOnline
+                    ? 'Online'
+                    : 'Direct Channel'}
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+
+          {/* Right: Phone, Video, Search, Privacy Lens & More Menu (Screen 3) */}
+          <View style={styles.headerRightGroup}>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                // Audio call action
+              }}
+              style={({ pressed }) => [styles.headerIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Voice call"
+            >
+              <AppIcon name="phone" size={19} color="#FFFFFF" />
+            </Pressable>
+
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                // Video call action
+              }}
+              style={({ pressed }) => [styles.headerIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Video call"
+            >
+              <AppIcon name="video" size={19} color="#FFFFFF" />
+            </Pressable>
+
+            {!isDecoy ? (
               <Pressable
-                hitSlop={10}
-                onPress={() => {
-                  setIsSearchActive((prev) => !prev);
-                  if (isSearchActive) {
-                    setSearchQuery('');
-                  }
+                hitSlop={8}
+                onPress={async () => {
+                  await togglePrivacyLens();
                 }}
                 style={({ pressed }) => [
                   styles.headerIconBtn,
                   {
-                    backgroundColor: isSearchActive ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
-                    borderColor: isSearchActive ? 'rgba(168, 85, 247, 0.4)' : 'transparent',
-                    borderWidth: 1,
+                    backgroundColor: isPrivacyLensEnabled ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                    borderRadius: 8,
                     opacity: pressed ? 0.6 : 1,
                   },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="Search messages in chat"
+                accessibilityLabel="Toggle Privacy Lens"
               >
                 <AppIcon
-                  name="search"
+                  name={isPrivacyLensEnabled ? 'eye' : 'eye-off'}
                   size={18}
-                  color={isSearchActive ? '#C084FC' : colors.text}
+                  color={isPrivacyLensEnabled ? '#38BDF8' : 'rgba(255, 255, 255, 0.7)'}
                 />
               </Pressable>
-              {!isDecoy ? (
-                <Pressable
-                  hitSlop={10}
-                  onPress={async () => {
-                    await togglePrivacyLens();
-                  }}
-                  style={({ pressed }) => [
-                    styles.headerIconBtn,
-                    {
-                      backgroundColor: isPrivacyLensEnabled ? 'rgba(168, 85, 247, 0.22)' : 'transparent',
-                      borderColor: isPrivacyLensEnabled ? 'rgba(168, 85, 247, 0.45)' : 'transparent',
-                      borderWidth: 1,
-                      opacity: pressed ? 0.6 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Toggle Privacy Lens"
-                >
-                  <AppIcon
-                    name={isPrivacyLensEnabled ? 'eye' : 'eye-off'}
-                    size={18}
-                    color={isPrivacyLensEnabled ? '#C084FC' : colors.textMuted}
-                  />
-                </Pressable>
-              ) : null}
-              {!isDecoy ? (
-                <Pressable
-                  hitSlop={10}
-                  onPress={() => setIsManageConnectionModalOpen(true)}
-                  style={({ pressed }) => [
-                    styles.headerIconBtn,
-                    {
-                      backgroundColor: isManageConnectionModalOpen ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
-                      borderColor: isManageConnectionModalOpen ? 'rgba(168, 85, 247, 0.4)' : 'transparent',
-                      borderWidth: 1,
-                      opacity: pressed ? 0.6 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Manage connection"
-                >
-                  <AppIcon name="more" size={18} color={colors.text} />
-                </Pressable>
-              ) : null}
-              <AppAvatar
-                name={participantName}
-                size="sm"
-                isOnline={isOnline}
+            ) : null}
+
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                setIsSearchActive((prev) => !prev);
+                if (isSearchActive) setSearchQuery('');
+              }}
+              style={({ pressed }) => [styles.headerIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Search messages in chat"
+            >
+              <AppIcon
+                name="search"
+                size={18}
+                color={isSearchActive ? '#38BDF8' : 'rgba(255, 255, 255, 0.8)'}
               />
-            </View>
-          }
-        />
+            </Pressable>
+
+            {!isDecoy ? (
+              <Pressable
+                hitSlop={8}
+                onPress={() => setIsManageConnectionModalOpen(true)}
+                style={({ pressed }) => [styles.headerIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Manage connection"
+              >
+                <AppIcon name="more" size={18} color="#FFFFFF" />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </CurvedWaveHeader>
+
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
 
         {/* In-Chat Message Search Bar */}
         {Boolean(isSearchActive) ? (
@@ -1030,6 +1057,31 @@ export default function PrivateChatScreen() {
                   animated: true,
                 });
               }}
+              ListHeaderComponent={
+                messages.length > 0 ? (
+                  <View style={styles.datePillWrapper}>
+                    <View
+                      style={[
+                        styles.datePill,
+                        {
+                          backgroundColor: isDark ? '#151922' : '#E2E8F0',
+                          borderColor: isDark ? '#242B3A' : 'transparent',
+                          borderWidth: isDark ? 1 : 0,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.datePillText,
+                          { color: isDark ? '#94A3B8' : '#475569' },
+                        ]}
+                      >
+                        Today
+                      </ThemedText>
+                    </View>
+                  </View>
+                ) : undefined
+              }
               renderItem={({ item }) => (
                 <MessageBubble
                   message={item}
@@ -1686,9 +1738,15 @@ export default function PrivateChatScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: '#181822',
-                borderColor: 'rgba(168, 85, 247, 0.4)',
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+                borderRadius: 24,
                 padding: spacing.lg,
+                shadowColor: '#000000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.4 : 0.12,
+                shadowRadius: 16,
+                elevation: 8,
               },
             ]}
             onPress={(e) => e.stopPropagation()}
@@ -1698,10 +1756,10 @@ export default function PrivateChatScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                 <AppAvatar name={participantName} size="md" isOnline={isOnline} />
                 <View>
-                  <ThemedText variant="bodyMedium" style={{ fontWeight: '700' }}>
+                  <ThemedText variant="bodyMedium" style={{ fontWeight: '700', color: colors.text }}>
                     {participantName}
                   </ThemedText>
-                  <ThemedText variant="caption" tone="secondary">
+                  <ThemedText variant="caption" style={{ color: colors.textMuted }}>
                     Direct Encrypted Channel
                   </ThemedText>
                 </View>
@@ -1711,7 +1769,7 @@ export default function PrivateChatScreen() {
                 onPress={() => setIsManageConnectionModalOpen(false)}
                 style={{ padding: 4 }}
               >
-                <AppIcon name="close" size={18} color={colors.textSecondary} />
+                <AppIcon name="close" size={18} color={colors.text} />
               </Pressable>
             </View>
 
@@ -1723,14 +1781,14 @@ export default function PrivateChatScreen() {
                 justifyContent: 'space-between',
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm,
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backgroundColor: colors.surfaceSecondary,
                 borderRadius: radius.md,
                 marginBottom: spacing.lg,
                 borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: colors.border,
               }}
             >
-              <ThemedText variant="caption" tone="secondary">
+              <ThemedText variant="caption" style={{ color: colors.textMuted }}>
                 Connection Status:
               </ThemedText>
               <View
@@ -1739,16 +1797,16 @@ export default function PrivateChatScreen() {
                   {
                     backgroundColor:
                       connectionStatus === 'accepted'
-                        ? 'rgba(34, 197, 94, 0.15)'
+                        ? (isDark ? 'rgba(34, 197, 94, 0.15)' : '#DCFCE7')
                         : connectionStatus === 'pending_sent'
-                        ? 'rgba(168, 85, 247, 0.15)'
-                        : 'rgba(239, 68, 68, 0.15)',
+                        ? (isDark ? 'rgba(56, 189, 248, 0.15)' : '#DBEAFE')
+                        : (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2'),
                     borderColor:
                       connectionStatus === 'accepted'
-                        ? '#22C55E'
+                        ? (isDark ? 'rgba(34, 197, 94, 0.4)' : '#86EFAC')
                         : connectionStatus === 'pending_sent'
-                        ? '#A855F7'
-                        : '#EF4444',
+                        ? (isDark ? 'rgba(56, 189, 248, 0.4)' : '#BFDBFE')
+                        : (isDark ? 'rgba(239, 68, 68, 0.4)' : '#FCA5A5'),
                     borderRadius: radius.full,
                     paddingHorizontal: 8,
                     paddingVertical: 2,
@@ -1760,10 +1818,10 @@ export default function PrivateChatScreen() {
                   style={{
                     color:
                       connectionStatus === 'accepted'
-                        ? '#4ADE80'
+                        ? (isDark ? '#4ADE80' : '#15803D')
                         : connectionStatus === 'pending_sent'
-                        ? '#C084FC'
-                        : '#FCA5A5',
+                        ? (isDark ? '#38BDF8' : '#1E40AF')
+                        : (isDark ? '#F87171' : '#B91C1C'),
                     fontSize: 11,
                     fontWeight: '600',
                   }}
@@ -1794,7 +1852,7 @@ export default function PrivateChatScreen() {
                   Permanently deletes all messages on your device. {participantName} keeps their copy intact.
                 </ThemedText>
 
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255, 255, 255, 0.12)', marginVertical: 4 }} />
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 4 }} />
 
                 <AppButton
                   title="Disconnect Connection"
@@ -1869,9 +1927,15 @@ export default function PrivateChatScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: '#181822',
-                borderColor: 'rgba(239, 68, 68, 0.4)',
+                backgroundColor: colors.surfaceElevated,
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#E2E8F0',
+                borderRadius: 24,
                 padding: spacing.lg,
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.4 : 0.12,
+                shadowRadius: 16,
+                elevation: 8,
               },
             ]}
             onPress={(e) => e.stopPropagation()}
@@ -1881,8 +1945,8 @@ export default function PrivateChatScreen() {
                 style={[
                   styles.emptyIconBox,
                   {
-                    borderColor: 'rgba(239, 68, 68, 0.4)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: isDark ? 'rgba(239, 68, 68, 0.4)' : '#FCA5A5',
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2',
                     borderRadius: radius.full,
                     marginBottom: spacing.sm,
                   },
@@ -1890,13 +1954,12 @@ export default function PrivateChatScreen() {
               >
                 <AppIcon name="lock" size={24} color="#EF4444" />
               </View>
-              <ThemedText variant="h3" style={{ textAlign: 'center' }}>
+              <ThemedText variant="h3" style={{ textAlign: 'center', color: colors.text, fontWeight: '700' }}>
                 Disconnect Connection?
               </ThemedText>
               <ThemedText
                 variant="caption"
-                tone="secondary"
-                style={{ textAlign: 'center', marginTop: 6, lineHeight: 18 }}
+                style={{ textAlign: 'center', marginTop: 6, lineHeight: 18, color: colors.textMuted }}
               >
                 Are you sure you want to disconnect from {participantName}? You will not be able to send or receive messages until a new request is sent and accepted.
               </ThemedText>
@@ -1950,9 +2013,15 @@ export default function PrivateChatScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: '#181822',
-                borderColor: 'rgba(239, 68, 68, 0.4)',
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+                borderRadius: 24,
                 padding: spacing.lg,
+                shadowColor: '#000000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.4 : 0.12,
+                shadowRadius: 16,
+                elevation: 8,
               },
             ]}
             onPress={(e) => e.stopPropagation()}
@@ -1963,9 +2032,9 @@ export default function PrivateChatScreen() {
                   width: 44,
                   height: 44,
                   borderRadius: 22,
-                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2',
                   borderWidth: 1,
-                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.4)' : '#FCA5A5',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -1973,10 +2042,10 @@ export default function PrivateChatScreen() {
                 <AppIcon name="trash" size={20} color="#EF4444" />
               </View>
               <View style={{ flex: 1 }}>
-                <ThemedText variant="h3" style={{ fontSize: 17, color: '#FFFFFF' }}>
+                <ThemedText variant="h3" style={{ fontSize: 17, color: colors.text, fontWeight: '700' }}>
                   Clear Chat?
                 </ThemedText>
-                <ThemedText variant="caption" tone="secondary">
+                <ThemedText variant="caption" style={{ color: colors.textMuted }}>
                   One-Sided Shred (Your Side Only)
                 </ThemedText>
               </View>
@@ -1984,18 +2053,18 @@ export default function PrivateChatScreen() {
 
             <View
               style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                borderColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
                 borderWidth: 1,
                 borderRadius: 12,
                 padding: 12,
                 marginBottom: spacing.lg,
               }}
             >
-              <ThemedText variant="caption" style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 18 }}>
+              <ThemedText variant="caption" style={{ color: colors.textSecondary, lineHeight: 18 }}>
                 This will permanently delete all messages, whispers, and media from this conversation on your phone.
               </ThemedText>
-              <ThemedText variant="caption" style={{ color: '#C084FC', marginTop: 8, fontWeight: '600' }}>
+              <ThemedText variant="caption" style={{ color: colors.accent, marginTop: 8, fontWeight: '600' }}>
                 ✓ {participantName} will keep their copy of the conversation intact.
               </ThemedText>
             </View>
@@ -2045,32 +2114,37 @@ export default function PrivateChatScreen() {
             style={[
               styles.modalCard,
               {
-                backgroundColor: '#12101B',
-                borderColor: 'rgba(168, 85, 247, 0.45)',
-                borderRadius: 20,
+                backgroundColor: '#FFFFFF',
+                borderColor: '#E2E8F0',
+                borderRadius: 24,
                 padding: spacing.lg,
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.12,
+                shadowRadius: 16,
+                elevation: 8,
               },
             ]}
             onPress={(e) => e.stopPropagation()}
           >
             {/* Security Header */}
             <View style={styles.whisperGuardHeader}>
-              <View style={styles.whisperGuardIconBubble}>
-                <AppIcon name="lock" size={20} color="#E9D5FF" />
+              <View style={[styles.whisperGuardIconBubble, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                <AppIcon name="lock" size={20} color="#1E40AF" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.whisperGuardTag}>
-                  <ThemedText style={styles.whisperGuardTagText}>ZERO LOUDSPEAKER ENFORCED</ThemedText>
+                <View style={[styles.whisperGuardTag, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
+                  <ThemedText style={[styles.whisperGuardTagText, { color: '#B91C1C' }]}>ZERO LOUDSPEAKER ENFORCED</ThemedText>
                 </View>
-                <ThemedText variant="h3" style={{ fontSize: 17, color: '#FFFFFF', marginTop: 3 }}>
+                <ThemedText variant="h3" style={{ fontSize: 17, color: '#0F172A', fontWeight: '700', marginTop: 3 }}>
                   Earpiece-Only Whisper
                 </ThemedText>
               </View>
             </View>
 
             {/* Safety Explanation */}
-            <View style={styles.whisperGuardExplainBox}>
-              <ThemedText variant="caption" style={styles.whisperGuardExplainText}>
+            <View style={[styles.whisperGuardExplainBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+              <ThemedText variant="caption" style={[styles.whisperGuardExplainText, { color: '#475569' }]}>
                 This voice note physically refuses to play over the open loudspeaker to ensure zero eavesdropping in public places.
               </ThemedText>
             </View>
@@ -2078,23 +2152,23 @@ export default function PrivateChatScreen() {
             {/* Primary Action: In-Ear Private Mode */}
             <Pressable
               onPress={handleStartInEarPlayback}
-              style={styles.whisperGuardPrimaryBtn}
+              style={[styles.whisperGuardPrimaryBtn, { backgroundColor: '#0B101B' }]}
               accessibilityRole="button"
               accessibilityLabel="Listen in private in-ear mode"
             >
               <LinearGradient
-                colors={['#8B5CF6', '#6D28D9']}
+                colors={['#0B101B', '#1E293B']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
               <View style={styles.whisperGuardBtnContent}>
-                <AppIcon name="headphones" size={20} color="#FFFFFF" />
+                <AppIcon name="headphones" size={20} color="#38BDF8" />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <ThemedText style={styles.whisperGuardBtnTitle}>
                     Listen in Private In-Ear Mode
                   </ThemedText>
-                  <ThemedText style={styles.whisperGuardBtnSubtitle}>
+                  <ThemedText style={[styles.whisperGuardBtnSubtitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                     Screen dims black • Hold phone to ear • Telephony filter
                   </ThemedText>
                 </View>
@@ -2104,12 +2178,12 @@ export default function PrivateChatScreen() {
             {/* Secondary Action: Low Volume (I'm Alone) */}
             <Pressable
               onPress={handleStartLowVolumePlayback}
-              style={styles.whisperGuardSecondaryBtn}
+              style={[styles.whisperGuardSecondaryBtn, { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' }]}
               accessibilityRole="button"
               accessibilityLabel="Play at low volume"
             >
-              <AppIcon name="play" size={14} color="#C084FC" />
-              <ThemedText style={styles.whisperGuardSecondaryText}>
+              <AppIcon name="play" size={14} color="#0F172A" />
+              <ThemedText style={[styles.whisperGuardSecondaryText, { color: '#0F172A' }]}>
                 {"Play at Low Volume (I'm in Private)"}
               </ThemedText>
             </Pressable>
@@ -2177,7 +2251,7 @@ export default function PrivateChatScreen() {
           </View>
         </Pressable>
       ) : null}
-    </AuroraBackground>
+    </View>
   );
 }
 
@@ -2340,6 +2414,51 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     alignItems: 'center',
+  },
+  chatRoomHeaderInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  headerLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peerTextGroup: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  peerNameText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  peerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 5,
+  },
+  statusDotGreen: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  peerStatusText: {
+    fontSize: 12,
+    color: '#94A3B8',
   },
   headerRightGroup: {
     flexDirection: 'row',
@@ -2580,6 +2699,21 @@ const styles = StyleSheet.create({
   inEarDismissHint: {
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 12,
+  },
+  datePillWrapper: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  datePill: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  datePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
 });
 

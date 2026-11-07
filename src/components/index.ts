@@ -11,4 +11,5 @@ export * from './MessageComposer';
 export * from './AppCard';
 export * from './AuroraBackground';
 export * from './ChameleonLockOverlay';
+export * from './CurvedWaveHeader';
 

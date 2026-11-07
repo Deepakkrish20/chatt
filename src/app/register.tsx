@@ -7,9 +7,8 @@ import {
   AppTextInput,
   AppButton,
   AppIcon,
-  ScreenHeader,
   AppCard,
-  AuroraBackground,
+  CurvedWaveHeader,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -180,22 +179,34 @@ export default function RegisterScreen() {
   };
 
   return (
-    <AuroraBackground style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader
-          title={view === 'form' ? 'Create Account' : 'Confirm Email'}
-          subtitle={view === 'form' ? 'Register for Chatt' : 'Verification Sent'}
-          showBack
-          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
-          onBack={() => {
-            if (view === 'awaiting_confirmation') {
-              setView('form');
-            } else {
-              router.back();
-            }
-          }}
-        />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <CurvedWaveHeader variant="chats" waveHeight={38}>
+        <View style={styles.headerBar}>
+          <Pressable
+            hitSlop={12}
+            onPress={() => {
+              if (view === 'awaiting_confirmation') {
+                setView('form');
+              } else {
+                router.back();
+              }
+            }}
+            style={({ pressed }) => [styles.backBtnRow, { opacity: pressed ? 0.6 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <AppIcon name="back" size={18} color="#FFFFFF" />
+            <ThemedText style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 8 }}>
+              {view === 'form' ? 'Create Account' : 'Confirm Email'}
+            </ThemedText>
+          </Pressable>
+          <ThemedText style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 13 }}>
+            chatt
+          </ThemedText>
+        </View>
+      </CurvedWaveHeader>
 
+      <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
@@ -493,13 +504,24 @@ export default function RegisterScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </AuroraBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  backBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   safeArea: {
     flex: 1,
@@ -528,7 +550,7 @@ const styles = StyleSheet.create({
   },
   codeFallbackSection: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: '#E2E8F0',
     paddingTop: 14,
   },
   loginFooter: {

@@ -12,13 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   ThemedText,
-  ScreenHeader,
   ConversationItem,
   AppIcon,
   AppTextInput,
   AppButton,
   AppAvatar,
-  AuroraBackground,
+  CurvedWaveHeader,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
@@ -47,7 +46,7 @@ import { useSecurity } from '@/context/SecurityContext';
 import { DECOY_CONVERSATIONS } from '@/data/decoyData';
 
 export default function ChatListScreen() {
-  const { colors, spacing, radius } = useAppTheme();
+  const { colors, spacing, radius, isDark } = useAppTheme();
   const { user, refreshCapacity } = useAuth();
   const { chameleonMode } = useSecurity();
 
@@ -56,6 +55,9 @@ export default function ChatListScreen() {
 
   // Tab state: 'chats' | 'requests'
   const [activeTab, setActiveTab] = useState<'chats' | 'requests'>('chats');
+  // Filter pills state matching Screen 2: 'all' | 'unread' | 'requests'
+  const [filterPill, setFilterPill] = useState<'all' | 'unread' | 'requests'>('all');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Conversations states
   const [conversations, setConversations] = useState<DirectConversationPreview[]>([]);
@@ -409,6 +411,18 @@ export default function ChatListScreen() {
     return combined;
   }, [searchQuery, conversations, matchedDeepConvs, filteredConversations]);
 
+  const totalUnread = useMemo(
+    () => conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0),
+    [conversations]
+  );
+
+  const displayedConversations = useMemo(() => {
+    if (filterPill === 'unread') {
+      return activeConversations.filter((c) => c.unreadCount > 0);
+    }
+    return activeConversations;
+  }, [filterPill, activeConversations]);
+
   // Filter members in modal
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
@@ -502,110 +516,171 @@ export default function ChatListScreen() {
   };
 
   return (
-    <AuroraBackground>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Top Header */}
-        <ScreenHeader
-          title={isDecoy ? 'Messages' : 'Chats'}
-          subtitle={isDecoy ? 'Direct Messages' : 'Permission-Based Messaging'}
-          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(168, 85, 247, 0.2)' }}
-          rightElement={
-            <View style={styles.headerActionsGroup}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Curved Midnight Wave Top Header (Matching Screen 2) */}
+      <CurvedWaveHeader variant="chats">
+        <View style={styles.headerInnerContainer}>
+          {/* Top indicator dash */}
+          <View style={styles.indicatorDash} />
+
+          {/* Title and Top Actions Row */}
+          <View style={styles.titleActionRow}>
+            <ThemedText variant="display" style={styles.screenTitle}>
+              {isDecoy ? 'Messages' : 'Chats'}
+            </ThemedText>
+
+            <View style={styles.headerRightActions}>
+              {/* Search Toggle Icon */}
+              <Pressable
+                hitSlop={10}
+                onPress={() => setIsSearchOpen((prev) => !prev)}
+                style={({ pressed }) => [styles.headerIconBtn, { opacity: pressed ? 0.7 : 1 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle Search"
+              >
+                <AppIcon name="search" size={20} color="#FFFFFF" />
+              </Pressable>
+
+              {/* Discover & Connect Ice-Blue Squircle "+" Button */}
               {!isDecoy ? (
                 <Pressable
                   hitSlop={10}
                   onPress={handleOpenNewChatModal}
-                  style={({ pressed }) => [styles.plusFab, { opacity: pressed ? 0.8 : 1 }]}
+                  style={({ pressed }) => [
+                    styles.plusSquareBtn,
+                    { backgroundColor: isDark ? '#38BDF8' : '#DBEAFE' },
+                    { opacity: pressed ? 0.8 : 1 },
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel="Discover & Connect"
                 >
-                  <AppIcon name="plus" size={18} color="#FFFFFF" />
+                  <AppIcon name="plus" size={18} color={isDark ? '#000000' : '#0B101B'} />
                 </Pressable>
               ) : null}
-              <Pressable
-                hitSlop={10}
-                onPress={() => router.push('/settings')}
-                style={({ pressed }) => [styles.headerAction, { opacity: pressed ? 0.6 : 1 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Open settings"
-              >
-                <AppIcon name="settings" size={18} color="#C084FC" />
-              </Pressable>
             </View>
-          }
-        />
+          </View>
 
-        {/* Top Sub-tabs: Chats vs Requests (Hidden in Decoy Mode) */}
-        {!isDecoy ? (
-          <View style={[styles.tabBarContainer, { borderColor: 'rgba(168, 85, 247, 0.2)' }]}>
+          {/* Filter Pills Row (Exact layout matching Screen 2, preserving Requests feature) */}
+          <View style={styles.filterPillsRow}>
             <Pressable
-              onPress={() => setActiveTab('chats')}
+              onPress={() => {
+                setFilterPill('all');
+                setActiveTab('chats');
+              }}
               style={[
-                styles.tabItem,
-                activeTab === 'chats' && styles.tabItemActive,
-                { borderColor: activeTab === 'chats' ? '#A855F7' : 'transparent' },
+                styles.filterPill,
+                activeTab === 'chats' && filterPill === 'all' && [
+                  styles.filterPillActive,
+                  { backgroundColor: isDark ? '#38BDF8' : '#DBEAFE' },
+                ],
               ]}
             >
               <ThemedText
                 variant="bodyMedium"
                 style={[
-                  styles.tabText,
-                  { color: activeTab === 'chats' ? '#FFFFFF' : colors.textMuted },
+                  styles.filterPillText,
+                  { color: colors.textMuted },
+                  activeTab === 'chats' && filterPill === 'all' && {
+                    color: isDark ? '#000000' : '#0F172A',
+                    fontWeight: '700',
+                  },
                 ]}
               >
-                Chats
+                All
               </ThemedText>
             </Pressable>
 
             <Pressable
-              onPress={() => setActiveTab('requests')}
+              onPress={() => {
+                setFilterPill('unread');
+                setActiveTab('chats');
+              }}
               style={[
-                styles.tabItem,
-                activeTab === 'requests' && styles.tabItemActive,
-                { borderColor: activeTab === 'requests' ? '#A855F7' : 'transparent' },
+                styles.filterPill,
+                activeTab === 'chats' && filterPill === 'unread' && [
+                  styles.filterPillActive,
+                  { backgroundColor: isDark ? '#38BDF8' : '#DBEAFE' },
+                ],
               ]}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <ThemedText
-                  variant="bodyMedium"
-                  style={[
-                    styles.tabText,
-                    { color: activeTab === 'requests' ? '#FFFFFF' : colors.textMuted },
-                  ]}
-                >
-                  Requests
-                </ThemedText>
-                {incomingRequests.length > 0 ? (
-                  <View style={styles.notificationBadge}>
-                    <ThemedText variant="label" style={styles.notificationBadgeText}>
-                      {incomingRequests.length}
-                    </ThemedText>
-                  </View>
-                ) : null}
-              </View>
+              <ThemedText
+                variant="bodyMedium"
+                style={[
+                  styles.filterPillText,
+                  { color: colors.textMuted },
+                  activeTab === 'chats' && filterPill === 'unread' && {
+                    color: isDark ? '#000000' : '#0F172A',
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                Unread {totalUnread > 0 ? `(${totalUnread})` : ''}
+              </ThemedText>
             </Pressable>
-          </View>
-        ) : null}
 
+            {!isDecoy ? (
+              <Pressable
+                onPress={() => {
+                  setFilterPill('requests');
+                  setActiveTab('requests');
+                }}
+                style={[
+                  styles.filterPill,
+                  activeTab === 'requests' && [
+                    styles.filterPillActive,
+                    { backgroundColor: isDark ? '#38BDF8' : '#DBEAFE' },
+                  ],
+                ]}
+              >
+                <View style={styles.requestsPillContent}>
+                  <ThemedText
+                    variant="bodyMedium"
+                    style={[
+                      styles.filterPillText,
+                      { color: colors.textMuted },
+                      activeTab === 'requests' && {
+                        color: isDark ? '#000000' : '#0F172A',
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    Requests
+                  </ThemedText>
+                  {incomingRequests.length > 0 ? (
+                    <View style={styles.requestsBadge}>
+                      <ThemedText style={styles.requestsBadgeText}>
+                        {incomingRequests.length}
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </CurvedWaveHeader>
+
+      <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
+        {/* Search Input Bar (smooth toggle or active search) */}
+        {(isSearchOpen || Boolean(searchQuery)) && (
+          <View
+            style={[
+              styles.searchContainer,
+              { paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+            ]}
+          >
+            <AppTextInput
+              placeholder="Search conversations…"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onClear={() => setSearchQuery('')}
+              containerStyle={styles.searchInput}
+            />
+          </View>
+        )}
 
         {activeTab === 'chats' ? (
           <>
-            {/* Search Input Bar */}
-            <View
-              style={[
-                styles.searchContainer,
-                { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-              ]}
-            >
-              <AppTextInput
-                placeholder="Search conversations…"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onClear={() => setSearchQuery('')}
-                containerStyle={styles.searchInput}
-              />
-            </View>
-
             {/* Conversation List */}
             {Boolean(isLoading) ? (
               <View style={[styles.centeredLoading, { padding: spacing.xl }]}>
@@ -620,7 +695,7 @@ export default function ChatListScreen() {
               </View>
             ) : (
               <FlatList
-                data={activeConversations}
+                data={displayedConversations}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
                   <ConversationItem
@@ -812,24 +887,29 @@ export default function ChatListScreen() {
                   style={[
                     styles.requestCard,
                     {
-                      borderColor: 'rgba(168, 85, 247, 0.3)',
+                      borderColor: colors.border,
                       backgroundColor: colors.surfaceElevated,
-                      borderRadius: radius.md,
+                      borderRadius: 20,
                       padding: spacing.md,
                       marginBottom: spacing.sm,
+                      shadowColor: '#000000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: isDark ? 0.3 : 0.04,
+                      shadowRadius: 4,
+                      elevation: 1,
                     },
                   ]}
                 >
                   <View style={styles.emptyMemberRow}>
                     <AppAvatar name={peer.displayName} size="md" isOnline={peer.isOnline} />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
-                      <ThemedText variant="bodyMedium" tone="primary">
+                      <ThemedText variant="bodyMedium" style={{ color: colors.text, fontWeight: '600' }}>
                         {peer.displayName}
                       </ThemedText>
-                      <ThemedText variant="caption" tone="secondary">
+                      <ThemedText variant="caption" style={{ color: colors.textMuted }}>
                         @{peer.username}
                       </ThemedText>
-                      <ThemedText variant="label" tone="muted" style={{ marginTop: 2 }}>
+                      <ThemedText variant="label" style={{ color: colors.textMuted, marginTop: 2 }}>
                         Wants to connect with you
                       </ThemedText>
                     </View>
@@ -917,20 +997,25 @@ export default function ChatListScreen() {
                           styles.requestCard,
                           {
                             borderColor: colors.border,
-                            backgroundColor: colors.surfaceSecondary,
-                            borderRadius: radius.md,
+                            backgroundColor: colors.surfaceElevated,
+                            borderRadius: 20,
                             padding: spacing.md,
                             marginBottom: spacing.sm,
+                            shadowColor: '#000000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: isDark ? 0.3 : 0.04,
+                            shadowRadius: 4,
+                            elevation: 1,
                           },
                         ]}
                       >
                         <View style={styles.emptyMemberRow}>
                           <AppAvatar name={peer.displayName} size="md" isOnline={peer.isOnline} />
                           <View style={{ flex: 1, marginLeft: spacing.md }}>
-                            <ThemedText variant="bodyMedium" tone="primary">
+                            <ThemedText variant="bodyMedium" style={{ color: colors.text, fontWeight: '600' }}>
                               {peer.displayName}
                             </ThemedText>
-                            <ThemedText variant="caption" tone="secondary">
+                            <ThemedText variant="caption" style={{ color: colors.textMuted }}>
                               @{peer.username}
                             </ThemedText>
                           </View>
@@ -939,12 +1024,12 @@ export default function ChatListScreen() {
                               style={[
                                 styles.pendingBadge,
                                 {
-                                  borderColor: colors.border,
-                                  backgroundColor: colors.surfaceElevated,
+                                  borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#BFDBFE',
+                                  backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#DBEAFE',
                                 },
                               ]}
                             >
-                              <ThemedText variant="captionMedium" style={{ color: '#C084FC' }}>
+                              <ThemedText variant="captionMedium" style={{ color: isDark ? '#38BDF8' : '#1E40AF', fontWeight: '600' }}>
                                 Pending ⏳
                               </ThemedText>
                             </View>
@@ -966,6 +1051,83 @@ export default function ChatListScreen() {
           />
         )}
 
+        {/* Floating Midnight Navigation Bar (Exact match with Screen 2) */}
+        <View style={styles.floatingNavWrapper} pointerEvents="box-none">
+          <View
+            style={[
+              styles.floatingNavBar,
+              {
+                backgroundColor: colors.floatingNavBg,
+                borderColor: isDark ? '#1E2533' : 'transparent',
+                borderWidth: isDark ? 1 : 0,
+              },
+            ]}
+          >
+            {/* 1. Chats Tab */}
+            <Pressable
+              onPress={() => {
+                setFilterPill('all');
+                setActiveTab('chats');
+              }}
+              style={({ pressed }) => [
+                activeTab === 'chats' ? [styles.navTabPillActive, { backgroundColor: isDark ? '#2563EB' : '#DBEAFE' }] : styles.navTabItem,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Chats tab"
+            >
+              <AppIcon
+                name="chat-bubble"
+                size={20}
+                color={activeTab === 'chats' ? (isDark ? '#FFFFFF' : '#0B101B') : colors.textMuted}
+              />
+            </Pressable>
+
+            {/* 2. Connections / Requests Tab */}
+            <Pressable
+              onPress={() => {
+                if (!isDecoy) {
+                  setFilterPill('requests');
+                  setActiveTab('requests');
+                }
+              }}
+              style={({ pressed }) => [
+                activeTab === 'requests' ? [styles.navTabPillActive, { backgroundColor: isDark ? '#2563EB' : '#DBEAFE' }] : styles.navTabItem,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Connections tab"
+            >
+              <AppIcon
+                name="users"
+                size={20}
+                color={activeTab === 'requests' ? (isDark ? '#FFFFFF' : '#0B101B') : colors.textMuted}
+              />
+              {incomingRequests.length > 0 ? <View style={styles.navDotIndicator} /> : null}
+            </Pressable>
+
+            {/* 3. Security / Chameleon Lock Tab */}
+            <Pressable
+              onPress={() => router.push('/settings')}
+              style={({ pressed }) => [styles.navTabItem, { opacity: pressed ? 0.8 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Security settings"
+            >
+              <AppIcon name="lock" size={19} color={colors.textMuted} />
+            </Pressable>
+
+            {/* 4. Profile / Settings Tab */}
+            <Pressable
+              onPress={() => router.push('/settings')}
+              style={({ pressed }) => [styles.navTabItem, { opacity: pressed ? 0.8 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Profile settings"
+            >
+              <AppIcon name="user" size={20} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        </View>
+
         {/* Discover & Connect Modal */}
         <Modal
           visible={isModalOpen}
@@ -978,20 +1140,25 @@ export default function ChatListScreen() {
               style={[
                 styles.modalContent,
                 {
-                  backgroundColor: '#181822',
-                  borderColor: 'rgba(168, 85, 247, 0.35)',
-                  borderRadius: 20,
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                  borderRadius: 24,
                   padding: spacing.lg,
+                  shadowColor: '#000000',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: isDark ? 0.4 : 0.15,
+                  shadowRadius: 20,
+                  elevation: 10,
                 },
               ]}
             >
               {/* Modal Header */}
               <View style={styles.modalHeader}>
                 <View>
-                  <ThemedText variant="h3" tone="primary">
+                  <ThemedText variant="h3" tone="primary" style={{ color: colors.text, fontWeight: '700' }}>
                     Discover Members
                   </ThemedText>
-                  <ThemedText variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                  <ThemedText variant="caption" tone="muted" style={{ marginTop: 2, color: colors.textMuted }}>
                     Request permission to speak
                   </ThemedText>
                 </View>
@@ -1019,8 +1186,8 @@ export default function ChatListScreen() {
                   style={[
                     styles.modalFeedbackBanner,
                     {
-                      borderColor: 'rgba(168, 85, 247, 0.4)',
-                      backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                      borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#BFDBFE',
+                      backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#EFF6FF',
                       padding: spacing.sm,
                       borderRadius: radius.sm,
                       marginTop: spacing.sm,
@@ -1029,7 +1196,7 @@ export default function ChatListScreen() {
                 >
                   <ThemedText
                     variant="caption"
-                    style={{ textAlign: 'center', color: '#E9D5FF' }}
+                    style={{ textAlign: 'center', color: isDark ? '#38BDF8' : '#1E40AF' }}
                   >
                     {modalFeedback}
                   </ThemedText>
@@ -1062,8 +1229,8 @@ export default function ChatListScreen() {
                       style={[
                         styles.memberRow,
                         {
-                          borderColor: 'rgba(255, 255, 255, 0.08)',
-                          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                          borderColor: colors.border,
+                          backgroundColor: colors.surfaceSecondary,
                           borderRadius: radius.md,
                           padding: spacing.sm,
                         },
@@ -1071,10 +1238,10 @@ export default function ChatListScreen() {
                     >
                       <AppAvatar name={item.displayName} size="md" isOnline={item.isOnline} />
                       <View style={styles.memberInfo}>
-                        <ThemedText variant="bodyMedium" tone="primary" numberOfLines={1}>
+                        <ThemedText variant="bodyMedium" tone="primary" numberOfLines={1} style={{ color: colors.text, fontWeight: '600' }}>
                           {item.displayName}
                         </ThemedText>
-                        <ThemedText variant="caption" tone="muted" numberOfLines={1}>
+                        <ThemedText variant="caption" tone="muted" numberOfLines={1} style={{ color: colors.textMuted }}>
                           @{item.username}
                         </ThemedText>
                       </View>
@@ -1086,7 +1253,7 @@ export default function ChatListScreen() {
                       <ThemedText
                         variant="caption"
                         tone="secondary"
-                        style={{ textAlign: 'center' }}
+                        style={{ textAlign: 'center', color: colors.textMuted }}
                       >
                         {Boolean(memberSearchQuery)
                           ? 'No matching members found.'
@@ -1095,9 +1262,9 @@ export default function ChatListScreen() {
                       <ThemedText
                         variant="caption"
                         tone="muted"
-                        style={{ textAlign: 'center', marginTop: 4, maxWidth: 240 }}
+                        style={{ textAlign: 'center', marginTop: 4, maxWidth: 240, color: colors.textMuted }}
                       >
-                        Up to 10 registered members can participate in this circle.
+                        Connect with people to begin private, encrypted conversations.
                       </ThemedText>
                     </View>
                   }
@@ -1119,11 +1286,16 @@ export default function ChatListScreen() {
               style={[
                 styles.modalContent,
                 {
-                  backgroundColor: '#181822',
-                  borderColor: 'rgba(239, 68, 68, 0.4)',
-                  borderRadius: 20,
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FEE2E2',
+                  borderRadius: 24,
                   padding: spacing.lg,
                   maxWidth: 380,
+                  shadowColor: '#000000',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: isDark ? 0.4 : 0.15,
+                  shadowRadius: 20,
+                  elevation: 10,
                 },
               ]}
             >
@@ -1132,21 +1304,22 @@ export default function ChatListScreen() {
                   style={[
                     styles.emptyIconContainer,
                     {
-                      borderColor: 'rgba(239, 68, 68, 0.4)',
-                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      borderColor: isDark ? 'rgba(239, 68, 68, 0.4)' : '#FECACA',
+                      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
                       marginBottom: spacing.sm,
+                      borderRadius: 24,
                     },
                   ]}
                 >
                   <AppIcon name="lock" size={24} color="#EF4444" />
                 </View>
-                <ThemedText variant="h3" style={{ textAlign: 'center' }}>
+                <ThemedText variant="h3" style={{ textAlign: 'center', color: colors.text, fontWeight: '700' }}>
                   Disconnect Connection?
                 </ThemedText>
                 <ThemedText
                   variant="caption"
                   tone="secondary"
-                  style={{ textAlign: 'center', marginTop: 6, lineHeight: 18 }}
+                  style={{ textAlign: 'center', marginTop: 6, lineHeight: 18, color: colors.textMuted }}
                 >
                   Are you sure you want to disconnect from {disconnectModalPeer?.displayName}? You will revoke messaging permissions. You can connect again whenever needed.
                 </ThemedText>
@@ -1174,7 +1347,7 @@ export default function ChatListScreen() {
           </View>
         </Modal>
       </SafeAreaView>
-    </AuroraBackground>
+    </View>
   );
 }
 
@@ -1185,6 +1358,142 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  headerInnerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 6,
+  },
+  indicatorDash: {
+    width: 32,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  titleActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusSquareBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 4,
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: '#DBEAFE',
+  },
+  filterPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  filterPillTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  requestsPillContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  requestsBadge: {
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestsBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  floatingNavWrapper: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 99,
+  },
+  floatingNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#0B101B',
+    width: '90%',
+    maxWidth: 360,
+    height: 60,
+    borderRadius: 30,
+    paddingHorizontal: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  navTabItem: {
+    width: 52,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  navTabPillActive: {
+    width: 52,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navDotIndicator: {
+    position: 'absolute',
+    top: 6,
+    right: 12,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#38BDF8',
+  },
   headerActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1194,14 +1503,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#9333EA',
+    backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 4,
   },
   headerAction: {
     width: 36,
@@ -1226,7 +1530,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   notificationBadge: {
-    backgroundColor: '#9333EA',
+    backgroundColor: '#2563EB',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -1247,6 +1551,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     flexGrow: 1,
+    paddingBottom: 110,
+    paddingTop: 8,
   },
   centeredLoading: {
     alignItems: 'center',
@@ -1266,7 +1572,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

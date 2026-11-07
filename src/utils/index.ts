@@ -25,7 +25,7 @@ export function getInitials(name: string): string {
 }
 
 /**
- * Validate whether the strict maximum 10-member limit has been reached.
+ * Network capacity validator (unlimited for production release).
  */
 export function isMemberLimitReached(_currentMemberCount: number): boolean {
   return false;

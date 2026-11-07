@@ -12,6 +12,12 @@ export type IconName =
   | 'check'
   | 'check-all'
   | 'user'
+  | 'users'
+  | 'chat-bubble'
+  | 'phone'
+  | 'video'
+  | 'bell'
+  | 'camera'
   | 'plus'
   | 'close'
   | 'dot'
@@ -718,6 +724,222 @@ export function AppIcon({ name, size = 20, color }: AppIconProps) {
                 backgroundColor: iconColor,
                 borderRadius: 1,
                 marginTop: 1,
+              }}
+            />
+          </View>
+        );
+
+      case 'chat-bubble':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.74,
+                height: size * 0.58,
+                borderRadius: size * 0.22,
+                borderWidth: 2,
+                borderColor: iconColor,
+                backgroundColor: 'transparent',
+              }}
+            />
+            {/* Speech pointer tail */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.16,
+                left: size * 0.18,
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderLeftWidth: size * 0.14,
+                borderTopWidth: size * 0.16,
+                borderLeftColor: 'transparent',
+                borderTopColor: iconColor,
+              }}
+            />
+          </View>
+        );
+
+      case 'users':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            {/* Primary User Head */}
+            <View
+              style={{
+                position: 'absolute',
+                top: size * 0.12,
+                left: size * 0.22,
+                width: size * 0.32,
+                height: size * 0.32,
+                borderRadius: size * 0.16,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+              }}
+            />
+            {/* Primary User Body */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.12,
+                left: size * 0.12,
+                width: size * 0.52,
+                height: size * 0.28,
+                borderTopLeftRadius: size * 0.18,
+                borderTopRightRadius: size * 0.18,
+                borderWidth: 1.8,
+                borderBottomWidth: 0,
+                borderColor: iconColor,
+              }}
+            />
+            {/* Secondary Peer Head (behind) */}
+            <View
+              style={{
+                position: 'absolute',
+                top: size * 0.16,
+                right: size * 0.12,
+                width: size * 0.26,
+                height: size * 0.26,
+                borderRadius: size * 0.13,
+                borderWidth: 1.6,
+                borderColor: iconColor,
+              }}
+            />
+            {/* Secondary Peer Body */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: size * 0.14,
+                right: size * 0.08,
+                width: size * 0.38,
+                height: size * 0.24,
+                borderTopRightRadius: size * 0.14,
+                borderWidth: 1.6,
+                borderBottomWidth: 0,
+                borderLeftWidth: 0,
+                borderColor: iconColor,
+              }}
+            />
+          </View>
+        );
+
+      case 'phone':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.5,
+                height: size * 0.72,
+                borderRadius: size * 0.14,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 3,
+              }}
+            >
+              <View style={{ width: size * 0.16, height: 1.5, backgroundColor: iconColor, borderRadius: 1 }} />
+              <View style={{ width: size * 0.1, height: size * 0.1, borderRadius: size * 0.05, borderWidth: 1, borderColor: iconColor }} />
+            </View>
+          </View>
+        );
+
+      case 'video':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.54,
+                height: size * 0.44,
+                borderRadius: 4,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                marginRight: size * 0.12,
+              }}
+            />
+            <View
+              style={{
+                position: 'absolute',
+                right: size * 0.14,
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderTopWidth: size * 0.16,
+                borderBottomWidth: size * 0.16,
+                borderRightWidth: size * 0.22,
+                borderTopColor: 'transparent',
+                borderBottomColor: 'transparent',
+                borderRightColor: iconColor,
+              }}
+            />
+          </View>
+        );
+
+      case 'bell':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.52,
+                height: size * 0.52,
+                borderTopLeftRadius: size * 0.26,
+                borderTopRightRadius: size * 0.26,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+              }}
+            />
+            <View
+              style={{
+                width: size * 0.72,
+                height: 2,
+                backgroundColor: iconColor,
+                borderRadius: 1,
+              }}
+            />
+            <View
+              style={{
+                width: size * 0.14,
+                height: size * 0.1,
+                borderBottomLeftRadius: size * 0.07,
+                borderBottomRightRadius: size * 0.07,
+                backgroundColor: iconColor,
+                marginTop: 1,
+              }}
+            />
+          </View>
+        );
+
+      case 'camera':
+        return (
+          <View style={[styles.center, { width: size, height: size }]}>
+            <View
+              style={{
+                width: size * 0.72,
+                height: size * 0.52,
+                borderRadius: 4,
+                borderWidth: 1.8,
+                borderColor: iconColor,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: size * 0.24,
+                  height: size * 0.24,
+                  borderRadius: size * 0.12,
+                  borderWidth: 1.6,
+                  borderColor: iconColor,
+                }}
+              />
+            </View>
+            <View
+              style={{
+                position: 'absolute',
+                top: size * 0.15,
+                left: size * 0.26,
+                width: size * 0.18,
+                height: 2,
+                backgroundColor: iconColor,
               }}
             />
           </View>

@@ -8,19 +8,17 @@ import {
   AppButton,
   AppIcon,
   AppCard,
-  AuroraBackground,
+  CurvedWaveHeader,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function WelcomeSignInScreen() {
-  const { colors, spacing, radius } = useAppTheme();
+  const { colors, spacing, radius, isDark } = useAppTheme();
   const {
     user,
     signIn,
     resendConfirmationEmail,
-    isConfigured,
-    wasSessionExpired,
     clearSessionExpiredFlag,
     isLoading: isAuthRestoring,
   } = useAuth();
@@ -34,6 +32,7 @@ export default function WelcomeSignInScreen() {
   const [resendStatus, setResendStatus] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSignInForm, setShowSignInForm] = useState(false);
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   // If already authenticated via restored session, skip sign-in screen
@@ -95,9 +94,126 @@ export default function WelcomeSignInScreen() {
     }
   };
 
+  if (!showSignInForm) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]}>
+        {/* Top Midnight Navy Zone (~65% height, Screen 1) */}
+        <View style={[styles.welcomeNavyZone, { backgroundColor: isDark ? '#000000' : '#0B101B' }]}>
+          <SafeAreaView edges={['top', 'left', 'right']} style={styles.welcomeSafeArea}>
+            {/* Chatt Stylized Minimalist Speech Bubble Logo */}
+            <View style={styles.logoWrapper}>
+              <View
+                style={[
+                  styles.speechBubbleIconOuter,
+                  isDark && { borderColor: '#38BDF8', shadowColor: '#38BDF8', shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.speechBubbleIconInner,
+                    isDark && { borderColor: '#38BDF8' },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* Title & Subtitle (Screen 1) */}
+            <ThemedText style={styles.welcomeTitle}>chatt</ThemedText>
+            <ThemedText style={styles.welcomeSubtitle}>
+              Private conversations{'\n'}that feel{' '}
+              <ThemedText style={{ color: isDark ? '#38BDF8' : '#FFFFFF', fontWeight: '700' }}>
+                closer.
+              </ThemedText>
+            </ThemedText>
+
+            {/* Minimalist Separator Dash */}
+            <View
+              style={[
+                styles.separatorDash,
+                isDark && { backgroundColor: '#38BDF8', width: 32 },
+              ]}
+            />
+          </SafeAreaView>
+        </View>
+
+        {/* Curved Organic Wave Transition */}
+        <CurvedWaveHeader variant="welcome" waveHeight={52} curveColor={isDark ? '#000000' : '#FFFFFF'} />
+
+        {/* Bottom Pure Area */}
+        <View style={[styles.welcomeBottomArea, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]}>
+          <Pressable
+            onPress={() => router.push('/register')}
+            style={({ pressed }) => [
+              styles.getStartedButton,
+              isDark && {
+                backgroundColor: '#2563EB',
+                borderColor: '#2563EB',
+                borderRadius: 28,
+                paddingVertical: 14,
+                paddingHorizontal: 20,
+                justifyContent: 'center',
+              },
+              { opacity: pressed ? 0.85 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Get Started"
+          >
+            {isDark ? (
+              <ThemedText style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>
+                Get Started →
+              </ThemedText>
+            ) : (
+              <>
+                <View style={styles.arrowCircle}>
+                  <ThemedText style={styles.arrowCircleText}>→</ThemedText>
+                </View>
+                <ThemedText style={styles.getStartedButtonText}>Get Started</ThemedText>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            onPress={() => setShowSignInForm(true)}
+            hitSlop={12}
+            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, marginTop: 18 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Already have an account? Sign In"
+          >
+            <ThemedText style={[styles.alreadyAccountText, isDark && { color: '#94A3B8' }]}>
+              Already have an account?{' '}
+              <ThemedText style={{ color: isDark ? '#38BDF8' : '#0F172A', fontWeight: '700' }}>
+                Sign In
+              </ThemedText>
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <AuroraBackground style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <CurvedWaveHeader variant="chats" waveHeight={38}>
+        <View style={styles.signInHeaderBar}>
+          <Pressable
+            onPress={() => setShowSignInForm(false)}
+            hitSlop={10}
+            style={({ pressed }) => [styles.backBtnRow, { opacity: pressed ? 0.6 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Back to welcome"
+          >
+            <AppIcon name="back" size={18} color="#FFFFFF" />
+            <ThemedText style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
+              Welcome
+            </ThemedText>
+          </Pressable>
+          <ThemedText style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 13 }}>
+            Sign In
+          </ThemedText>
+        </View>
+      </CurvedWaveHeader>
+
+      <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
@@ -106,89 +222,33 @@ export default function WelcomeSignInScreen() {
             ref={scrollViewRef}
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
+              { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
             ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Brand Header */}
-            <View style={styles.brandSection}>
-              <View
-                style={[
-                  styles.logoBadge,
-                  {
-                    borderColor: 'rgba(168, 85, 247, 0.45)',
-                    backgroundColor: '#181822',
-                    borderRadius: 20,
-                    padding: spacing.md,
-                    shadowColor: '#A855F7',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.4,
-                    shadowRadius: 12,
-                    elevation: 6,
-                  },
-                ]}
-              >
-                <AppIcon name="lock" size={26} color="#C084FC" />
-              </View>
-
-              <ThemedText variant="display" style={styles.title}>
-                CHATT
-              </ThemedText>
-
-              <ThemedText variant="label" tone="muted" style={styles.brandTag}>
-                DIRECT 1:1 MESSENGER
-              </ThemedText>
-
-              <ThemedText variant="caption" tone="secondary" style={styles.subtitle}>
-                Fast, private, end-to-end real-time communication.
-              </ThemedText>
-
-              {/* Status indicator pill */}
-              <View
-                style={[
-                  styles.statusPill,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceSecondary,
-                    borderRadius: radius.full,
-                    marginTop: 8,
-                  },
-                ]}
-              >
-                <ThemedText variant="label" tone="muted" style={{ fontSize: 9 }}>
-                  {isConfigured ? 'BACKEND CONNECTED' : 'OFFLINE MODE'}
-                </ThemedText>
-              </View>
-            </View>
-
-            {/* Inactivity Session Expiry Banner */}
-            {Boolean(wasSessionExpired) ? (
-              <View
-                style={[
-                  styles.bannerBox,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surfaceSecondary,
-                    borderRadius: radius.md,
-                    padding: spacing.md,
-                    marginTop: spacing.md,
-                  },
-                ]}
-              >
-                <ThemedText variant="label" tone="primary" style={{ textAlign: 'center', marginBottom: 2 }}>
-                  SESSION EXPIRED (3 DAYS INACTIVITY)
-                </ThemedText>
-                <ThemedText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
-                  For security, logins expire after 3 days of inactivity. Please sign in again.
-                </ThemedText>
-              </View>
-            ) : null}
-
             {/* Sign-in Form */}
-            <AppCard style={[styles.formCard, { marginTop: spacing.md, gap: spacing.md }]}>
-              <ThemedText variant="h3">
-                Sign In
+            <AppCard
+              style={[
+                styles.formCard,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceElevated,
+                  borderRadius: 24,
+                  padding: spacing.lg,
+                  shadowColor: '#000000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: isDark ? 0.3 : 0.06,
+                  shadowRadius: 10,
+                  elevation: 2,
+                },
+              ]}
+            >
+              <ThemedText variant="h2" style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>
+                Welcome Back
+              </ThemedText>
+              <ThemedText variant="caption" style={{ color: colors.textMuted, marginBottom: spacing.md }}>
+                Sign in to your private conversations
               </ThemedText>
 
               {/* Error banner */}
@@ -321,13 +381,142 @@ export default function WelcomeSignInScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </AuroraBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  welcomeNavyZone: {
+    backgroundColor: '#0B101B',
+    paddingHorizontal: 28,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  welcomeSafeArea: {
+    width: '100%',
+  },
+  welcomeTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 44,
+  },
+  topDashIndicator: {
+    width: 28,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  pageNumberText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  logoWrapper: {
+    marginBottom: 24,
+  },
+  speechBubbleIconOuter: {
+    width: 52,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  speechBubbleIconInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  welcomeTitle: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
+    marginBottom: 16,
+  },
+  welcomeSubtitle: {
+    fontSize: 19,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    lineHeight: 27,
+    letterSpacing: -0.2,
+    marginBottom: 26,
+  },
+  separatorDash: {
+    width: 28,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    marginBottom: 10,
+  },
+  welcomeBottomArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+  },
+  getStartedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 36,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    width: '100%',
+    maxWidth: 320,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  arrowCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#0B101B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  arrowCircleText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: -2,
+  },
+  getStartedButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  alreadyAccountText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  signInHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  backBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   safeArea: {
     flex: 1,

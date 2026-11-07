@@ -1,27 +1,23 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, Switch, Modal, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   ThemedText,
-  ScreenHeader,
   AppAvatar,
   AppCard,
   AppButton,
   AppTextInput,
   AppIcon,
-  AuroraBackground,
+  CurvedWaveHeader,
 } from '@/components';
 import { useAppTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
 import { useSecurity } from '@/context/SecurityContext';
-import { clearAllStoredRequests } from '@/lib/supabase/requests';
-import { ADMIN_USER } from '@/data/mockData';
 import { DECOY_USER } from '@/data/decoyData';
 
 export default function SettingsScreen() {
-  const { colors, spacing, radius } = useAppTheme();
-  const { user, profile, isAdmin, adminCreateMember, signOut, isConfigured } = useAuth();
+  const { colors, spacing, radius, isDark, setThemeMode } = useAppTheme();
+  const { user, profile, signOut } = useAuth();
   const {
     isChameleonConfigured,
     chameleonMode,
@@ -40,13 +36,6 @@ export default function SettingsScreen() {
   const [offlineNotifications, setOfflineNotifications] = useState(false);
   const [showSignOutPrompt, setShowSignOutPrompt] = useState(false);
 
-  // Admin member creation state
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberUser, setNewMemberUser] = useState('');
-  const [newMemberPass, setNewMemberPass] = useState('');
-  const [isProvisioning, setIsProvisioning] = useState(false);
-  const [provisionMsg, setProvisionMsg] = useState<{ text: string; error: boolean } | null>(null);
-
   // Chameleon Duress PIN state
   const [isChameleonModalOpen, setIsChameleonModalOpen] = useState(false);
   const [inputRealPin, setInputRealPin] = useState('');
@@ -55,39 +44,12 @@ export default function SettingsScreen() {
   const [isSavingChameleon, setIsSavingChameleon] = useState(false);
   const [chameleonNotice, setChameleonNotice] = useState('');
 
-  // Reset connections state
-  const [isResettingConn, setIsResettingConn] = useState(false);
-  const [resetConnMsg, setResetConnMsg] = useState('');
-
   const displayName = isDecoy
     ? DECOY_USER.displayName
-    : profile?.display_name || user?.user_metadata?.displayName || ADMIN_USER.displayName;
+    : profile?.display_name || user?.user_metadata?.displayName || 'Chatt User';
   const username = isDecoy
     ? DECOY_USER.username
-    : profile?.username || user?.user_metadata?.username || ADMIN_USER.username;
-  const email = isDecoy ? DECOY_USER.email : user?.email || ADMIN_USER.email;
-
-  const handleCreateMember = async () => {
-    setProvisionMsg(null);
-    if (!newMemberName.trim() || !newMemberUser.trim() || !newMemberPass.trim()) {
-      setProvisionMsg({ text: 'All fields are required to create a member.', error: true });
-      return;
-    }
-    setIsProvisioning(true);
-    const res = await adminCreateMember(newMemberUser, newMemberName, newMemberPass);
-    setIsProvisioning(false);
-    if (res.success) {
-      setProvisionMsg({
-        text: `Member @${newMemberUser.toLowerCase().trim()} created! They can now sign in with their Member ID and password.`,
-        error: false,
-      });
-      setNewMemberName('');
-      setNewMemberUser('');
-      setNewMemberPass('');
-    } else {
-      setProvisionMsg({ text: res.error || 'Failed to create member.', error: true });
-    }
-  };
+    : profile?.username || user?.user_metadata?.username || 'user';
 
   const handleSaveChameleon = async () => {
     setChameleonError('');
@@ -115,83 +77,266 @@ export default function SettingsScreen() {
     setTimeout(() => setChameleonNotice(''), 3000);
   };
 
-  const handleResetConnections = async () => {
-    setIsResettingConn(true);
-    setResetConnMsg('');
-    try {
-      await clearAllStoredRequests(user?.id);
-      setResetConnMsg('Chat requests cache cleared! Members can now connect from scratch.');
-      setTimeout(() => setResetConnMsg(''), 4000);
-    } catch {
-      setResetConnMsg('Failed to reset requests cache.');
-    } finally {
-      setIsResettingConn(false);
-    }
-  };
-
   const handleSignOut = async () => {
     await signOut();
     router.replace('/');
   };
 
   return (
-    <AuroraBackground style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader
-          title={isDecoy ? 'Account Settings' : 'Profile & Settings'}
-          subtitle={isDecoy ? 'Preferences' : 'Closed-Circle Configuration'}
-          showBack
-          style={{ backgroundColor: 'transparent', borderBottomColor: 'rgba(255, 255, 255, 0.08)' }}
-          onBack={() => router.back()}
-        />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Curved Midnight Wave Top Header with Scenic Split (Matching Screen 4) */}
+      <CurvedWaveHeader variant="profile" waveHeight={48}>
+        <View style={styles.profileHeaderInner}>
+          <Pressable
+            hitSlop={12}
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <AppIcon name="back" size={20} color="#FFFFFF" />
+          </Pressable>
 
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.md },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Profile Card */}
-          <AppCard style={styles.profileCard}>
-            <View style={styles.profileRow}>
-              <AppAvatar
-                name={displayName}
-                size="lg"
-                isOnline={true}
-                style={{ marginRight: spacing.md }}
+          <Pressable
+            hitSlop={12}
+            onPress={() => setShowSignOutPrompt(true)}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+          >
+            <AppIcon name="more" size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </CurvedWaveHeader>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingHorizontal: spacing.md, paddingBottom: 40, gap: spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Large Avatar Cutout & Hero Section (Screen 4) */}
+        <View style={styles.heroProfileSection}>
+          <View style={styles.largeAvatarWrapper}>
+            <AppAvatar
+              name={displayName}
+              size="xl"
+              isOnline={true}
+              style={styles.avatarCutoutShadow}
+            />
+          </View>
+
+          <ThemedText variant="h1" style={styles.profileNameText}>
+            {displayName}
+          </ThemedText>
+          <ThemedText variant="body" style={styles.profileHandleText}>
+            @{username}
+          </ThemedText>
+
+          {/* 4-Button Quick Action Row (Screen 4: Chat, Call, Video, Bell) */}
+          <View style={styles.quickActionRow}>
+            <Pressable
+              onPress={() => router.push('/chats')}
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: isDark ? '#151922' : '#F1F5F9',
+                  borderColor: isDark ? '#242B3A' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Go to chats"
+            >
+              <AppIcon name="chat-bubble" size={20} color={isDark ? '#FFFFFF' : '#0F172A'} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => {}}
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: isDark ? '#151922' : '#F1F5F9',
+                  borderColor: isDark ? '#242B3A' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Audio Call"
+            >
+              <AppIcon name="phone" size={20} color={isDark ? '#FFFFFF' : '#0F172A'} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => {}}
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: isDark ? '#151922' : '#F1F5F9',
+                  borderColor: isDark ? '#242B3A' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Video Call"
+            >
+              <AppIcon name="video" size={20} color={isDark ? '#FFFFFF' : '#0F172A'} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setOfflineNotifications((prev) => !prev)}
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: offlineNotifications
+                    ? (isDark ? '#2563EB' : '#DBEAFE')
+                    : (isDark ? '#151922' : '#F1F5F9'),
+                  borderColor: isDark ? '#242B3A' : 'transparent',
+                  borderWidth: isDark ? 1 : 0,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle notifications"
+            >
+              <AppIcon
+                name="bell"
+                size={20}
+                color={offlineNotifications ? (isDark ? '#FFFFFF' : '#1E40AF') : (isDark ? '#FFFFFF' : '#0F172A')}
               />
+            </Pressable>
+          </View>
+        </View>
 
-              <View style={styles.profileInfo}>
-                <ThemedText variant="h2">{displayName}</ThemedText>
-                <ThemedText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
-                  @{username}
+        {/* Profile Info Cards (Screen 4: About, Media, Shared Links, Notes) */}
+        <View
+          style={[
+            styles.infoCardsSection,
+            {
+              backgroundColor: isDark ? '#151922' : '#FFFFFF',
+              borderColor: isDark ? '#242B3A' : '#E2E8F0',
+            },
+          ]}
+        >
+          <View style={styles.infoCardRow}>
+            <View style={styles.infoCardLeft}>
+              <View
+                style={[
+                  styles.infoIconBox,
+                  { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC' },
+                ]}
+              >
+                <ThemedText style={{ fontSize: 16 }}>ℹ️</ThemedText>
+              </View>
+              <View>
+                <ThemedText variant="bodySemibold" style={[styles.infoCardTitle, { color: colors.text }]}>
+                  About
                 </ThemedText>
-                <ThemedText variant="caption" tone="muted" style={{ marginTop: 1, fontSize: 11 }}>
-                  {email}
+                <ThemedText variant="caption" style={[styles.infoCardSubtitle, { color: colors.textMuted }]}>
+                  Mechanical Engineer • Builder • Learner
                 </ThemedText>
-                <View
-                  style={[
-                    styles.memberPill,
-                    {
-                      backgroundColor: colors.surfaceSecondary,
-                      borderColor: colors.border,
-                      borderRadius: radius.full,
-                      marginTop: 8,
-                    },
-                  ]}
-                >
-                  <ThemedText variant="label" tone="primary" style={{ fontSize: 10 }}>
-                    {isDecoy
-                      ? 'PERSONAL PROFILE • ACTIVE'
-                      : isConfigured
-                      ? 'AUTHENTICATED MEMBER • VERIFIED'
-                      : 'DEMO MEMBER • LOCAL ACTIVE'}
-                  </ThemedText>
-                </View>
               </View>
             </View>
-          </AppCard>
+            <ThemedText style={[styles.chevronArrow, { color: colors.textMuted }]}>›</ThemedText>
+          </View>
+
+          <View style={[styles.infoDivider, { backgroundColor: isDark ? '#242B3A' : '#F1F5F9' }]} />
+
+          <View style={styles.infoCardRow}>
+            <View style={styles.infoCardLeft}>
+              <View
+                style={[
+                  styles.infoIconBox,
+                  { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC' },
+                ]}
+              >
+                <ThemedText style={{ fontSize: 16 }}>🖼️</ThemedText>
+              </View>
+              <ThemedText variant="bodySemibold" style={[styles.infoCardTitle, { color: colors.text }]}>
+                Media
+              </ThemedText>
+            </View>
+            <View style={styles.infoCardRightCount}>
+              <ThemedText variant="caption" style={[styles.infoCountText, { color: colors.textMuted }]}>
+                24 files
+              </ThemedText>
+              <ThemedText style={[styles.chevronArrow, { color: colors.textMuted }]}>›</ThemedText>
+            </View>
+          </View>
+
+          <View style={[styles.infoDivider, { backgroundColor: isDark ? '#242B3A' : '#F1F5F9' }]} />
+
+          <View style={styles.infoCardRow}>
+            <View style={styles.infoCardLeft}>
+              <View
+                style={[
+                  styles.infoIconBox,
+                  { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC' },
+                ]}
+              >
+                <ThemedText style={{ fontSize: 16 }}>🔗</ThemedText>
+              </View>
+              <ThemedText variant="bodySemibold" style={[styles.infoCardTitle, { color: colors.text }]}>
+                Shared Links
+              </ThemedText>
+            </View>
+            <View style={styles.infoCardRightCount}>
+              <ThemedText variant="caption" style={[styles.infoCountText, { color: colors.textMuted }]}>
+                8 links
+              </ThemedText>
+              <ThemedText style={[styles.chevronArrow, { color: colors.textMuted }]}>›</ThemedText>
+            </View>
+          </View>
+
+          <View style={[styles.infoDivider, { backgroundColor: isDark ? '#242B3A' : '#F1F5F9' }]} />
+
+          <View style={styles.infoCardRow}>
+            <View style={styles.infoCardLeft}>
+              <View
+                style={[
+                  styles.infoIconBox,
+                  { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC' },
+                ]}
+              >
+                <ThemedText style={{ fontSize: 16 }}>📝</ThemedText>
+              </View>
+              <ThemedText variant="bodySemibold" style={[styles.infoCardTitle, { color: colors.text }]}>
+                Notes
+              </ThemedText>
+            </View>
+            <View style={styles.infoCardRightCount}>
+              <ThemedText variant="caption" style={[styles.infoCountText, { color: colors.textMuted }]}>
+                3 notes
+              </ThemedText>
+              <ThemedText style={[styles.chevronArrow, { color: colors.textMuted }]}>›</ThemedText>
+            </View>
+          </View>
+        </View>
+
+        {/* Member Status Pill */}
+        <View
+          style={[
+            styles.memberPill,
+            {
+              backgroundColor: isDark ? '#151922' : '#FFFFFF',
+              borderColor: isDark ? '#242B3A' : '#E2E8F0',
+              borderRadius: radius.full,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              alignSelf: 'center',
+            },
+          ]}
+        >
+          <ThemedText variant="label" tone="primary" style={{ fontSize: 10, color: colors.textMuted }}>
+            {isDecoy
+              ? 'PERSONAL PROFILE • ACTIVE'
+              : 'VERIFIED ACCOUNT • END-TO-END ENCRYPTED'}
+          </ThemedText>
+        </View>
 
           {/* Chameleon Duress Section (Hidden in Decoy Mode) */}
           {!isDecoy ? (
@@ -205,7 +350,7 @@ export default function SettingsScreen() {
                   <View style={{ flex: 1, marginRight: 8 }}>
                     <ThemedText variant="bodySemibold">Chameleon Duress Vault</ThemedText>
                     <ThemedText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
-                      Set a Real PIN to open your 10-member circle, and a Decoy PIN to open a harmless fake messenger if forced to unlock.
+                      Set a Real PIN to open your private conversations, and a Decoy PIN to open a harmless decoy messenger if forced to unlock.
                     </ThemedText>
                   </View>
                   <View
@@ -291,108 +436,74 @@ export default function SettingsScreen() {
             </View>
           ) : null}
 
-          {/* Admin Member Provisioning Section (Hidden in Decoy Mode) */}
-          {!isDecoy && Boolean(isAdmin) ? (
-            <View style={styles.section}>
-              <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
-                ADMIN CONTROLS: PROVISION NEW MEMBER
-              </ThemedText>
-
-              <AppCard style={{ gap: spacing.sm + 2 }}>
-                <ThemedText variant="bodySemibold">Create Member Account</ThemedText>
-                <ThemedText variant="caption" tone="secondary" style={{ marginTop: -4 }}>
-                  Provision credentials directly. Members log in instantly without email confirmation.
-                </ThemedText>
-
-                {Boolean(provisionMsg) ? (
-                  <View
-                    style={[
-                      styles.msgBanner,
-                      {
-                        backgroundColor: colors.surfaceSecondary,
-                        borderColor: colors.border,
-                        borderRadius: radius.sm,
-                        padding: spacing.sm,
-                      },
-                    ]}
-                  >
-                    <ThemedText
-                      variant="caption"
-                      tone={provisionMsg!.error ? 'primary' : 'secondary'}
-                      style={{ textAlign: 'center' }}
-                    >
-                      {provisionMsg!.text}
-                    </ThemedText>
-                  </View>
-                ) : null}
-
-                <AppTextInput
-                  label="Display Name"
-                  placeholder="e.g. Jana Thiru"
-                  value={newMemberName}
-                  onChangeText={setNewMemberName}
-                  containerStyle={{ marginBottom: 0 }}
-                />
-
-                <AppTextInput
-                  label="Username / Member ID"
-                  placeholder="e.g. jana"
-                  value={newMemberUser}
-                  onChangeText={setNewMemberUser}
-                  autoCapitalize="none"
-                  containerStyle={{ marginBottom: 0 }}
-                />
-
-                <AppTextInput
-                  label="Temporary Password"
-                  placeholder="e.g. Jana@12345"
-                  value={newMemberPass}
-                  onChangeText={setNewMemberPass}
-                  isPassword
-                  containerStyle={{ marginBottom: 0 }}
-                />
-
-                <AppButton
-                  title={isProvisioning ? 'Creating Member…' : 'Create Member Account'}
-                  variant="primary"
-                  loading={isProvisioning}
-                  disabled={isProvisioning}
-                  onPress={handleCreateMember}
-                  style={{ marginTop: spacing.xs }}
-                />
-              </AppCard>
-            </View>
-          ) : null}
-
-          {/* Appearance Settings Section */}
+          {/* Appearance & Theme Settings Section */}
           <View style={styles.section}>
             <ThemedText variant="label" tone="muted" style={{ marginBottom: spacing.xs, marginLeft: 4 }}>
-              APPEARANCE (AURORA ECLIPSE)
+              APPEARANCE & THEME
             </ThemedText>
 
             <AppCard style={{ gap: spacing.md }}>
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
-                  <ThemedText variant="bodyMedium">Aurora Eclipse Theme</ThemedText>
+                  <ThemedText variant="bodyMedium">Theme Style</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
-                    Obsidian dark with fluid purple aurora accents
+                    {isDark ? 'Midnight Wave Dark (Pitch Black OLED)' : 'Midnight Wave Light (Clean White & Slate)'}
                   </ThemedText>
                 </View>
-                <View
-                  style={[
-                    styles.badgePill,
-                    {
-                      backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                      borderColor: 'rgba(168, 85, 247, 0.5)',
-                      borderRadius: radius.full,
-                      paddingHorizontal: spacing.sm + 2,
-                      paddingVertical: spacing.xs,
-                    },
-                  ]}
-                >
-                  <ThemedText variant="label" style={{ color: '#C084FC', fontWeight: '600' }}>
-                    ACTIVE
-                  </ThemedText>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable
+                    onPress={() => setThemeMode('light')}
+                    style={[
+                      styles.badgePill,
+                      {
+                        backgroundColor: !isDark ? '#0F172A' : colors.surfaceSecondary,
+                        borderColor: !isDark ? '#0F172A' : colors.border,
+                        borderRadius: radius.full,
+                        paddingHorizontal: spacing.sm + 4,
+                        paddingVertical: spacing.xs + 2,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Switch to Light Theme"
+                  >
+                    <ThemedText
+                      variant="label"
+                      style={{
+                        color: !isDark ? '#FFFFFF' : colors.textMuted,
+                        fontWeight: '700',
+                        fontSize: 11,
+                      }}
+                    >
+                      ☀️ Light
+                    </ThemedText>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setThemeMode('dark')}
+                    style={[
+                      styles.badgePill,
+                      {
+                        backgroundColor: isDark ? '#2563EB' : colors.surfaceSecondary,
+                        borderColor: isDark ? '#38BDF8' : colors.border,
+                        borderRadius: radius.full,
+                        paddingHorizontal: spacing.sm + 4,
+                        paddingVertical: spacing.xs + 2,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Switch to Dark Theme"
+                  >
+                    <ThemedText
+                      variant="label"
+                      style={{
+                        color: isDark ? '#FFFFFF' : colors.textMuted,
+                        fontWeight: '700',
+                        fontSize: 11,
+                      }}
+                    >
+                      🌙 Dark
+                    </ThemedText>
+                  </Pressable>
                 </View>
               </View>
 
@@ -400,15 +511,15 @@ export default function SettingsScreen() {
 
               <View style={styles.settingRow}>
                 <View style={styles.settingTextGroup}>
-                  <ThemedText variant="bodyMedium">Fluid Aurora Ribbon</ThemedText>
+                  <ThemedText variant="bodyMedium">High Contrast Borders</ThemedText>
                   <ThemedText variant="caption" tone="secondary">
-                    Breathing animated ambient lighting
+                    Enhanced perimeter definition for conversation cards
                   </ThemedText>
                 </View>
                 <Switch
                   value={highContrastBorders}
                   onValueChange={setHighContrastBorders}
-                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  trackColor={{ false: isDark ? '#1E2533' : '#E2E8F0', true: isDark ? '#2563EB' : '#0F172A' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -535,7 +646,7 @@ export default function SettingsScreen() {
                 <Switch
                   value={readReceipts}
                   onValueChange={setReadReceipts}
-                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0F172A' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -552,41 +663,11 @@ export default function SettingsScreen() {
                 <Switch
                   value={offlineNotifications}
                   onValueChange={setOfflineNotifications}
-                  trackColor={{ false: '#181822', true: '#9333EA' }}
+                  trackColor={{ false: '#E2E8F0', true: '#0F172A' }}
                   thumbColor="#FFFFFF"
                 />
               </View>
 
-              {!isDecoy ? (
-                <>
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                  <View style={styles.settingRow}>
-                    <View style={{ flex: 1, marginRight: spacing.sm }}>
-                      <ThemedText variant="bodyMedium">Reset Chat Requests</ThemedText>
-                      <ThemedText variant="caption" tone="secondary">
-                        Clear local request cache to re-connect members from first
-                      </ThemedText>
-                    </View>
-                    <AppButton
-                      title="Reset"
-                      variant="outline"
-                      size="sm"
-                      loading={isResettingConn}
-                      onPress={handleResetConnections}
-                    />
-                  </View>
-
-                  {Boolean(resetConnMsg) ? (
-                    <ThemedText
-                      variant="caption"
-                      style={{ color: '#4ADE80', textAlign: 'center', marginTop: 4 }}
-                    >
-                      {resetConnMsg}
-                    </ThemedText>
-                  ) : null}
-                </>
-              ) : null}
             </AppCard>
           </View>
 
@@ -645,8 +726,15 @@ export default function SettingsScreen() {
               style={[
                 styles.modalContent,
                 {
-                  backgroundColor: '#181822',
-                  borderColor: 'rgba(168, 85, 247, 0.4)',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#E2E8F0',
+                  borderRadius: 24,
+                  padding: spacing.lg,
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 20,
+                  elevation: 10,
                 },
               ]}
             >
@@ -693,8 +781,8 @@ export default function SettingsScreen() {
               ) : null}
 
               <ThemedText variant="caption" tone="secondary" style={{ marginBottom: spacing.md }}>
-                • <ThemedText variant="captionMedium" style={{ color: '#A855F7' }}>Real PIN</ThemedText>: Opens your authentic 10-member confidential circle.{'\n'}
-                • <ThemedText variant="captionMedium" style={{ color: '#38BDF8' }}>Decoy PIN</ThemedText>: Opens harmless fake chats if forced to unlock.
+                • <ThemedText variant="captionMedium" style={{ color: '#A855F7' }}>Real PIN</ThemedText>: Opens your authentic confidential conversations.{'\n'}
+                • <ThemedText variant="captionMedium" style={{ color: '#38BDF8' }}>Decoy PIN</ThemedText>: Opens harmless decoy chats if forced to unlock.
               </ThemedText>
 
               <AppTextInput
@@ -726,8 +814,7 @@ export default function SettingsScreen() {
             </View>
           </View>
         </Modal>
-      </SafeAreaView>
-    </AuroraBackground>
+    </View>
   );
 }
 
@@ -735,25 +822,133 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  safeArea: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
   },
-  profileCard: {
-    width: '100%',
-  },
-  profileRow: {
+  profileHeaderInner: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
-  profileInfo: {
-    flex: 1,
+  headerBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
     justifyContent: 'center',
   },
+  heroProfileSection: {
+    alignItems: 'center',
+    marginTop: -20,
+    marginBottom: 8,
+  },
+  largeAvatarWrapper: {
+    marginBottom: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  avatarCutoutShadow: {},
+  profileNameText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  profileHandleText: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    marginTop: 18,
+    width: '100%',
+  },
+  quickActionBtn: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  infoCardsSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+    width: '100%',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  infoCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  infoCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  infoIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  infoCardSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  infoCardRightCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoCountText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  chevronArrow: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  infoDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#F1F5F9',
+    width: '100%',
+  },
   memberPill: {
-    alignSelf: 'flex-start',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -782,7 +977,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

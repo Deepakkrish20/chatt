@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, Platform, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { DirectMessage } from '@/types';
 import { AppIcon } from './AppIcon';
@@ -30,7 +29,7 @@ export function MessageBubble({
   isPlayingWhisper = false,
   whisperProgress = 0,
 }: MessageBubbleProps) {
-  const { colors, spacing, radius, typography } = useAppTheme();
+  const { colors, spacing, radius, typography, isDark } = useAppTheme();
   const isOutgoing = message.isOutgoing;
   const isDeleted = Boolean(message.isDeletedForEveryone);
   const useNativeDriver = Platform.OS !== 'web';
@@ -196,36 +195,38 @@ export function MessageBubble({
               paddingHorizontal: spacing.md,
               paddingTop: spacing.sm + 2,
               paddingBottom: spacing.xs + 3,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              borderBottomLeftRadius: 18,
-              borderBottomRightRadius: isOutgoing ? 4 : 18,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              borderBottomLeftRadius: isOutgoing ? 20 : 4,
+              borderBottomRightRadius: isOutgoing ? 4 : 20,
               opacity: pressed && !isPrivacyLensActive && (onLongPress || onDoubleTap) ? 0.8 : 1,
               overflow: 'hidden',
               minWidth: whisperData ? 225 : capsuleData ? 245 : undefined,
             },
             isOutgoing
               ? {
-                  backgroundColor: isDeleted ? colors.surfaceSecondary : colors.bubbleOutgoingBg,
-                  borderColor: isDeleted ? colors.border : 'rgba(192, 132, 252, 0.35)',
+                  backgroundColor: isDeleted
+                    ? (isDark ? '#1E2533' : '#F1F5F9')
+                    : (isDark ? '#2563EB' : '#0F172A'),
+                  borderColor: isDeleted
+                    ? (isDark ? '#242B3A' : '#E2E8F0')
+                    : (isDark ? '#1D4ED8' : '#1E293B'),
                   borderWidth: 1,
                 }
               : {
-                  backgroundColor: colors.bubbleIncomingBg,
-                  borderColor: colors.bubbleIncomingBorder,
+                  backgroundColor: isDeleted
+                    ? (isDark ? '#151922' : '#F8FAFC')
+                    : (isDark ? '#151922' : '#FFFFFF'),
+                  borderColor: isDark ? '#242B3A' : '#E2E8F0',
                   borderWidth: 1,
+                  shadowColor: '#000000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: isDark ? 0.3 : 0.04,
+                  shadowRadius: 3,
+                  elevation: 1,
                 },
           ]}
         >
-          {isOutgoing && !isDeleted ? (
-            <LinearGradient
-              colors={['#8B5CF6', '#6D28D9']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : null}
-
           {isDeleted ? (
             <View style={styles.deletedContainer}>
               <AppIcon name="ban" size={13} color={colors.textMuted} />
@@ -233,7 +234,7 @@ export function MessageBubble({
                 style={[
                   typography.caption,
                   styles.deletedText,
-                  { color: colors.textMuted },
+                  { color: isDark ? '#64748B' : '#94A3B8' },
                 ]}
               >
                 This message was deleted
@@ -282,20 +283,19 @@ export function MessageBubble({
                         }
                       }}
                       hitSlop={6}
-                      style={styles.whisperPlayBtn}
+                      style={[
+                        styles.whisperPlayBtn,
+                        {
+                          backgroundColor: isOutgoing ? '#FFFFFF' : (isDark ? '#2563EB' : '#0F172A'),
+                        },
+                      ]}
                       accessibilityRole="button"
                       accessibilityLabel={isPlayingWhisper ? 'Pause whisper' : 'Play earpiece whisper'}
                     >
-                      <LinearGradient
-                        colors={isPlayingWhisper ? ['#10B981', '#059669'] : ['#A855F7', '#6D28D9']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
                       <AppIcon
                         name={isPlayingWhisper ? 'pause' : 'play'}
                         size={13}
-                        color="#FFFFFF"
+                        color={isOutgoing ? (isDark ? '#2563EB' : '#0F172A') : '#FFFFFF'}
                       />
                     </Pressable>
 
@@ -311,7 +311,11 @@ export function MessageBubble({
                               styles.whisperWaveBar,
                               {
                                 height: Math.max(5, Math.min(26, Math.round(barVal * 28))),
-                                backgroundColor: isPlayed ? '#38BDF8' : 'rgba(233, 213, 255, 0.45)',
+                                backgroundColor: isPlayed
+                                  ? '#38BDF8'
+                                  : isOutgoing
+                                  ? 'rgba(255, 255, 255, 0.4)'
+                                  : (isDark ? '#334155' : '#CBD5E1'),
                               },
                             ]}
                           />
@@ -319,7 +323,7 @@ export function MessageBubble({
                       })}
                     </View>
 
-                    <Text style={styles.whisperTimerText}>
+                    <Text style={[styles.whisperTimerText, { color: isOutgoing ? '#FFFFFF' : (isDark ? '#FFFFFF' : '#0F172A') }]}>
                       {isPlayingWhisper && (whisperProgress || 0) > 0
                         ? formatAudioDuration((whisperProgress || 0) * whisperData.duration)
                         : formatAudioDuration(whisperData.duration)}
@@ -378,7 +382,9 @@ export function MessageBubble({
                   </View>
 
                   {capsuleData.title ? (
-                    <Text style={styles.capsuleTitleText}>{capsuleData.title}</Text>
+                    <Text style={[styles.capsuleTitleText, { color: isOutgoing ? '#FFFFFF' : (isDark ? '#FFFFFF' : '#0F172A') }]}>
+                      {capsuleData.title}
+                    </Text>
                   ) : null}
 
                   {capsuleCountdown?.isUnlocked ? (
@@ -410,7 +416,7 @@ export function MessageBubble({
                   style={[
                     typography.body,
                     {
-                      color: '#FFFFFF',
+                      color: isOutgoing ? '#FFFFFF' : (isDark ? '#FFFFFF' : '#0F172A'),
                       fontSize: 15,
                       lineHeight: 20,
                       opacity: isPrivacyLensActive
@@ -444,22 +450,14 @@ export function MessageBubble({
                         inputRange: [0, 1],
                         outputRange: [1, 0],
                       }),
-                      backgroundColor: isOutgoing ? 'rgba(76, 29, 149, 0.88)' : 'rgba(24, 24, 34, 0.94)',
+                      backgroundColor: isOutgoing
+                        ? (isDark ? 'rgba(37, 99, 235, 0.94)' : 'rgba(15, 23, 42, 0.92)')
+                        : (isDark ? 'rgba(21, 25, 34, 0.95)' : 'rgba(241, 245, 249, 0.94)'),
                     },
                   ]}
                 >
-                  <LinearGradient
-                    colors={
-                      isOutgoing
-                        ? ['rgba(139, 92, 246, 0.4)', 'rgba(109, 40, 217, 0.6)']
-                        : ['rgba(255, 255, 255, 0.08)', 'rgba(168, 85, 247, 0.2)']
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
                   <View style={styles.privacyEyeBadge}>
-                    <AppIcon name="eye-off" size={15} color="#E9D5FF" />
+                    <AppIcon name="eye-off" size={15} color={isOutgoing ? '#38BDF8' : (isDark ? '#38BDF8' : '#0F172A')} />
                   </View>
                 </Animated.View>
               ) : null}
@@ -472,7 +470,7 @@ export function MessageBubble({
                 <AppIcon
                   name={isRevealed ? 'eye' : 'eye-off'}
                   size={10}
-                  color={isOutgoing ? '#E9D5FF' : colors.textMuted}
+                  color={isOutgoing ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#64748B' : '#94A3B8')}
                 />
               </View>
             ) : null}
@@ -482,7 +480,7 @@ export function MessageBubble({
                 typography.label,
                 {
                   fontSize: 10,
-                  color: isOutgoing ? '#E9D5FF' : colors.bubbleIncomingTime,
+                  color: isOutgoing ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#64748B' : '#94A3B8'),
                   marginRight: isOutgoing && !isDeleted ? 3 : 0,
                 },
               ]}
@@ -494,7 +492,7 @@ export function MessageBubble({
               <AppIcon
                 name={message.status === 'read' ? 'check-all' : 'check'}
                 size={13}
-                color={message.status === 'read' ? '#E9D5FF' : 'rgba(233, 213, 255, 0.7)'}
+                color={message.status === 'read' ? '#38BDF8' : 'rgba(255, 255, 255, 0.7)'}
               />
             ) : null}
 
@@ -508,7 +506,7 @@ export function MessageBubble({
                 ]}
                 accessibilityLabel="Message options"
               >
-                <AppIcon name="more" size={11} color={isOutgoing ? '#E9D5FF' : colors.textSecondary} />
+                <AppIcon name="more" size={11} color={isOutgoing ? 'rgba(255, 255, 255, 0.7)' : (isDark ? '#64748B' : '#94A3B8')} />
               </Pressable>
             ) : null}
           </View>
@@ -521,8 +519,8 @@ export function MessageBubble({
             style={[
               styles.reactionBadge,
               {
-                backgroundColor: '#181822',
-                borderColor: 'rgba(168, 85, 247, 0.45)',
+                backgroundColor: isDark ? '#151922' : '#FFFFFF',
+                borderColor: isDark ? '#242B3A' : '#E2E8F0',
                 borderRadius: radius.full,
               },
               isOutgoing ? styles.reactionBadgeRight : styles.reactionBadgeLeft,
@@ -691,11 +689,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowColor: '#A855F7',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 3,
   },
   whisperWaveformRow: {
     flex: 1,
@@ -780,9 +778,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.4)',
+    borderColor: 'rgba(56, 189, 248, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

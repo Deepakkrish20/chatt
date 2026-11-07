@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Animated, Platform, Modal } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/hooks/use-theme';
 import { AppIcon } from './AppIcon';
 import { createWhisperRecorder, formatWhisperMessage, formatAudioDuration, WhisperRecorder } from '@/lib/audio';
@@ -15,21 +14,21 @@ export interface MessageComposerProps {
 }
 
 const CAPSULE_PRESETS = [
-  { label: '+1 Min (Test)', durationMs: 60 * 1000, description: 'In 1 minute (Fast Test)' },
-  { label: '+5 Mins', durationMs: 5 * 60 * 1000, description: 'In 5 minutes' },
-  { label: '+1 Hour', durationMs: 60 * 60 * 1000, description: 'In 1 hour' },
+  { label: '5 Mins', durationMs: 5 * 60 * 1000, description: 'In 5 minutes' },
+  { label: '1 Hour', durationMs: 60 * 60 * 1000, description: 'In 1 hour' },
   { label: 'Tomorrow', durationMs: 24 * 60 * 60 * 1000, description: 'In 24 hours (Tomorrow)' },
-  { label: '+7 Days', durationMs: 7 * 24 * 60 * 60 * 1000, description: 'In 7 days (Next week)' },
+  { label: '7 Days', durationMs: 7 * 24 * 60 * 60 * 1000, description: 'In 7 days (Next week)' },
+  { label: '30 Days', durationMs: 30 * 24 * 60 * 60 * 1000, description: 'In 30 days (Next month)' },
 ];
 
 export function MessageComposer({
   onSendMessage,
   onTyping,
-  placeholder = 'Message or Whisper…',
+  placeholder = 'Message...',
   disabled = false,
   bottomInset = 0,
 }: MessageComposerProps) {
-  const { colors, typography } = useAppTheme();
+  const { colors, isDark, typography } = useAppTheme();
   const [text, setText] = useState('');
   const [buttonScale] = useState(() => new Animated.Value(1));
   const [isRecording, setIsRecording] = useState(false);
@@ -44,7 +43,7 @@ export function MessageComposer({
   const [isCapsuleModalOpen, setIsCapsuleModalOpen] = useState(false);
   const [capsuleText, setCapsuleText] = useState('');
   const [capsuleTitle, setCapsuleTitle] = useState('');
-  const [selectedDurationMs, setSelectedDurationMs] = useState(60 * 1000);
+  const [selectedDurationMs, setSelectedDurationMs] = useState(5 * 60 * 1000);
   const [capsuleError, setCapsuleError] = useState('');
   const [isSealingCapsule, setIsSealingCapsule] = useState(false);
 
@@ -67,7 +66,7 @@ export function MessageComposer({
     onSendMessage?.(capsuleMsg);
     setCapsuleText('');
     setCapsuleTitle('');
-    setSelectedDurationMs(60 * 1000);
+    setSelectedDurationMs(5 * 60 * 1000);
     setIsSealingCapsule(false);
     setIsCapsuleModalOpen(false);
   };
@@ -217,6 +216,8 @@ export function MessageComposer({
       style={[
         styles.outerContainer,
         {
+          backgroundColor: isDark ? '#000000' : '#F8FAFC',
+          borderTopColor: isDark ? '#1E2533' : '#F1F5F9',
           paddingTop: 8,
           paddingBottom: bottomInset > 0 ? bottomInset : 10,
           paddingHorizontal: 12,
@@ -233,13 +234,18 @@ export function MessageComposer({
               setIsCapsuleModalOpen(true);
             }}
             style={({ pressed }) => [
-              styles.capsuleTriggerBtn,
-              { opacity: pressed ? 0.7 : 1 },
+              styles.plusSquareBtn,
+              {
+                backgroundColor: isDark ? '#151922' : '#DBEAFE',
+                borderColor: isDark ? '#242B3A' : 'transparent',
+                borderWidth: isDark ? 1 : 0,
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Create time capsule"
+            accessibilityLabel="Create time capsule or attachment"
           >
-            <AppIcon name="hourglass" size={17} color="#C084FC" />
+            <AppIcon name="plus" size={19} color={isDark ? '#FFFFFF' : '#0B101B'} />
           </Pressable>
         ) : null}
 
@@ -284,13 +290,13 @@ export function MessageComposer({
             </View>
           </View>
         ) : (
-          /* Aurora Dark Message Input Capsule */
+          /* Midnight Wave Clean Message Input Capsule */
           <View
             style={[
               styles.inputCapsule,
               {
-                backgroundColor: '#181822',
-                borderColor: '#2A273C',
+                backgroundColor: isDark ? '#151922' : '#FFFFFF',
+                borderColor: isDark ? '#242B3A' : '#E2E8F0',
               },
             ]}
           >
@@ -315,13 +321,13 @@ export function MessageComposer({
               style={[
                 typography.body,
                 styles.input,
-                { color: disabled ? colors.textMuted : '#FFFFFF' },
+                { color: disabled ? colors.textMuted : colors.text },
               ]}
             />
           </View>
         )}
 
-        {/* Aurora Glowing Circular Action FAB */}
+        {/* Right Action Button: Mic or Send (Screen 3) */}
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <Pressable
             disabled={disabled}
@@ -336,7 +342,9 @@ export function MessageComposer({
             }
             style={({ pressed }) => [
               styles.sendFab,
-              isRecording || hasText || !disabled ? styles.sendFabActive : styles.sendFabInactive,
+              hasText
+                ? [styles.sendFabActive, { backgroundColor: isDark ? '#2563EB' : '#0F172A' }]
+                : styles.sendFabNeutral,
               { opacity: pressed ? 0.85 : 1 },
             ]}
             accessibilityRole="button"
@@ -348,23 +356,10 @@ export function MessageComposer({
                 : 'Record whisper voice note'
             }
           >
-            <LinearGradient
-              colors={
-                isRecording
-                  ? ['#10B981', '#059669']
-                  : hasText
-                  ? ['#A855F7', '#7C3AED']
-                  : ['#9333EA', '#6B21A8']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-
             <AppIcon
               name={isRecording ? 'send' : hasText ? 'send' : 'mic'}
-              size={18}
-              color="#FFFFFF"
+              size={hasText ? 18 : 22}
+              color={hasText ? '#FFFFFF' : (isDark ? '#FFFFFF' : '#0F172A')}
             />
           </Pressable>
         </Animated.View>
@@ -386,17 +381,33 @@ export function MessageComposer({
           }}
         >
           <Pressable
-            style={styles.capsuleModalCard}
+            style={[
+              styles.capsuleModalCard,
+              {
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+                shadowColor: '#000000',
+                shadowOpacity: isDark ? 0.4 : 0.15,
+              },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <View style={styles.capsuleModalHeader}>
-              <View style={styles.capsuleModalIconBubble}>
+              <View
+                style={[
+                  styles.capsuleModalIconBubble,
+                  {
+                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
+                    borderColor: isDark ? 'rgba(245, 158, 11, 0.4)' : '#FDE68A',
+                  },
+                ]}
+              >
                 <AppIcon name="hourglass" size={20} color="#F59E0B" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.capsuleModalTitle}>Time-Locked Capsule</Text>
-                <Text style={styles.capsuleModalSubtitle}>
+                <Text style={[styles.capsuleModalTitle, { color: colors.text }]}>Time-Locked Capsule</Text>
+                <Text style={[styles.capsuleModalSubtitle, { color: colors.textMuted }]}>
                   Sealed message that unlocks at a future time
                 </Text>
               </View>
@@ -405,37 +416,53 @@ export function MessageComposer({
                 onPress={() => setIsCapsuleModalOpen(false)}
                 style={{ padding: 4 }}
               >
-                <AppIcon name="close" size={18} color="#94A3B8" />
+                <AppIcon name="close" size={18} color={colors.textMuted} />
               </Pressable>
             </View>
 
             {/* Secret Message Input */}
-            <View style={styles.capsuleInputBox}>
+            <View
+              style={[
+                styles.capsuleInputBox,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <TextInput
                 value={capsuleText}
                 onChangeText={setCapsuleText}
                 placeholder="Write your secret message for the future…"
-                placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
-                style={styles.capsuleTextInput}
+                style={[styles.capsuleTextInput, { color: colors.text }]}
               />
             </View>
 
             {/* Optional Title / Theme */}
-            <View style={styles.capsuleTitleInputBox}>
+            <View
+              style={[
+                styles.capsuleTitleInputBox,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <TextInput
                 value={capsuleTitle}
                 onChangeText={setCapsuleTitle}
                 placeholder="Capsule label (e.g. Birthday Note) — optional"
-                placeholderTextColor="rgba(255, 255, 255, 0.35)"
-                style={styles.capsuleTitleInput}
+                placeholderTextColor={colors.textMuted}
+                style={[styles.capsuleTitleInput, { color: colors.text }]}
               />
             </View>
 
             {/* Unlock Preset Selectors */}
-            <Text style={styles.capsuleDurationLabel}>SELECT UNLOCK TIME</Text>
+            <Text style={[styles.capsuleDurationLabel, { color: colors.textMuted }]}>SELECT UNLOCK TIME</Text>
             <View style={styles.capsulePresetRow}>
               {CAPSULE_PRESETS.map((preset) => {
                 const isSelected = selectedDurationMs === preset.durationMs;
@@ -445,13 +472,27 @@ export function MessageComposer({
                     onPress={() => setSelectedDurationMs(preset.durationMs)}
                     style={[
                       styles.capsulePresetChip,
-                      isSelected && styles.capsulePresetChipActive,
+                      {
+                        backgroundColor: colors.surfaceSecondary,
+                        borderColor: colors.border,
+                      },
+                      isSelected && [
+                        styles.capsulePresetChipActive,
+                        {
+                          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.25)' : '#FEF3C7',
+                          borderColor: '#F59E0B',
+                        },
+                      ],
                     ]}
                   >
                     <Text
                       style={[
                         styles.capsulePresetText,
-                        isSelected && styles.capsulePresetTextActive,
+                        { color: colors.textSecondary },
+                        isSelected && [
+                          styles.capsulePresetTextActive,
+                          { color: isDark ? '#FBBF24' : '#B45309' },
+                        ],
                       ]}
                     >
                       {preset.label}
@@ -462,10 +503,23 @@ export function MessageComposer({
             </View>
 
             {/* Unlock Summary Preview */}
-            <View style={styles.capsuleUnlockPreviewBox}>
+            <View
+              style={[
+                styles.capsuleUnlockPreviewBox,
+                {
+                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
+                  borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+                },
+              ]}
+            >
               <AppIcon name="clock" size={13} color="#FBBF24" />
-              <Text style={styles.capsuleUnlockPreviewText}>
-                Unlocks: {CAPSULE_PRESETS.find((p) => p.durationMs === selectedDurationMs)?.description || 'In 1 minute'}
+              <Text
+                style={[
+                  styles.capsuleUnlockPreviewText,
+                  { color: isDark ? '#FBBF24' : '#B45309' },
+                ]}
+              >
+                Unlocks: {CAPSULE_PRESETS.find((p) => p.durationMs === selectedDurationMs)?.description || 'In 5 minutes'}
               </Text>
             </View>
 
@@ -477,9 +531,15 @@ export function MessageComposer({
             <View style={styles.capsuleModalActionRow}>
               <Pressable
                 onPress={() => setIsCapsuleModalOpen(false)}
-                style={styles.capsuleCancelBtn}
+                style={[
+                  styles.capsuleCancelBtn,
+                  {
+                    backgroundColor: colors.surfaceSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
               >
-                <Text style={styles.capsuleCancelText}>Cancel</Text>
+                <Text style={[styles.capsuleCancelText, { color: colors.text }]}>Cancel</Text>
               </Pressable>
 
               <Pressable
@@ -487,15 +547,10 @@ export function MessageComposer({
                 disabled={!capsuleText.trim()}
                 style={[
                   styles.capsuleSendBtn,
+                  { backgroundColor: isDark ? '#2563EB' : '#0F172A' },
                   !capsuleText.trim() && { opacity: 0.5 },
                 ]}
               >
-                <LinearGradient
-                  colors={['#D97706', '#B45309']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
                 <AppIcon name="lock" size={14} color="#FFFFFF" />
                 <Text style={styles.capsuleSendBtnText}>Seal & Send Capsule</Text>
               </Pressable>
@@ -509,29 +564,35 @@ export function MessageComposer({
 
 const styles = StyleSheet.create({
   outerContainer: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(168, 85, 247, 0.15)',
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
     width: '100%',
-    backgroundColor: '#07070A',
   },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  plusSquareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   capsuleTriggerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#181822',
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.35)',
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -539,13 +600,15 @@ const styles = StyleSheet.create({
   capsuleModalCard: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
     padding: 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
     elevation: 10,
   },
   capsuleModalHeader: {
@@ -557,54 +620,54 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderColor: '#FDE68A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   capsuleModalTitle: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 17,
     fontWeight: '700',
   },
   capsuleModalSubtitle: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#64748B',
     fontSize: 12,
     marginTop: 2,
   },
   capsuleInputBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 10,
     minHeight: 88,
   },
   capsuleTextInput: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 14,
     lineHeight: 20,
     padding: 0,
     textAlignVertical: 'top',
   },
   capsuleTitleInputBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 16,
   },
   capsuleTitleInput: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontSize: 13,
     padding: 0,
   },
   capsuleDurationLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: '#64748B',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -620,29 +683,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: '#E2E8F0',
   },
   capsulePresetChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: '#FEF3C7',
     borderColor: '#F59E0B',
   },
   capsulePresetText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#64748B',
     fontSize: 12,
     fontWeight: '600',
   },
   capsulePresetTextActive: {
-    color: '#FBBF24',
+    color: '#B45309',
     fontWeight: '700',
   },
   capsuleUnlockPreviewBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: 'rgba(245, 158, 11, 0.25)',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -650,7 +713,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   capsuleUnlockPreviewText: {
-    color: '#FDE68A',
+    color: '#B45309',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -669,12 +732,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   capsuleCancelText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#0F172A',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -687,9 +751,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     paddingVertical: 12,
-    shadowColor: '#D97706',
+    backgroundColor: '#0F172A',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
   },
@@ -704,14 +769,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 24,
-    minHeight: 48,
+    minHeight: 46,
     maxHeight: 120,
     paddingHorizontal: 16,
     paddingVertical: 4,
   },
   recordingCapsule: {
-    backgroundColor: '#151320',
-    borderColor: '#7C3AED',
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
     paddingVertical: 8,
     gap: 12,
   },
@@ -751,7 +816,7 @@ const styles = StyleSheet.create({
   },
   waveformBar: {
     width: 3,
-    backgroundColor: '#C084FC',
+    backgroundColor: '#38BDF8',
     borderRadius: 2,
   },
   input: {
@@ -762,23 +827,24 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendFab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   sendFabActive: {
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.65,
-    shadowRadius: 10,
-    elevation: 8,
+    backgroundColor: '#0F172A',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  sendFabNeutral: {
+    backgroundColor: 'transparent',
   },
   sendFabInactive: {
-    backgroundColor: '#181822',
-    borderWidth: 1,
-    borderColor: '#2A273C',
+    backgroundColor: '#F1F5F9',
   },
 });

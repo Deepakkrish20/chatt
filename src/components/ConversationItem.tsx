@@ -11,7 +11,7 @@ export interface ConversationItemProps {
 }
 
 export function ConversationItem({ conversation, onPress }: ConversationItemProps) {
-  const { colors, spacing, typography } = useAppTheme();
+  const { colors, spacing, typography, isDark } = useAppTheme();
   const [scaleAnim] = useState(() => new Animated.Value(1));
   const useNativeDriver = Platform.OS !== 'web';
 
@@ -44,18 +44,21 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
         style={({ pressed }) => [
           styles.container,
           {
-            backgroundColor: pressed
-              ? '#1E1B2E'
-              : isHighlighted
-              ? 'rgba(26, 22, 42, 0.85)'
-              : 'rgba(18, 16, 28, 0.65)',
+            backgroundColor: isDark
+              ? (pressed ? '#151922' : '#0B0F17')
+              : (pressed ? '#F1F5F9' : '#FFFFFF'),
             borderColor: isHighlighted
-              ? 'rgba(168, 85, 247, 0.45)'
-              : 'rgba(40, 35, 60, 0.5)',
+              ? (isDark ? '#2563EB' : '#DBEAFE')
+              : (isDark ? '#1E2533' : '#F1F5F9'),
             borderWidth: 1,
-            borderRadius: 18,
+            borderRadius: 20,
             paddingHorizontal: spacing.md,
-            paddingVertical: spacing.md,
+            paddingVertical: 12,
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: isDark ? 0.3 : 0.04,
+            shadowRadius: 4,
+            elevation: 1,
           },
         ]}
         accessibilityRole="button"
@@ -70,10 +73,10 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
 
         <View style={styles.content}>
           <View style={styles.topRow}>
-            <ThemedText variant="bodySemibold" numberOfLines={1} style={[styles.name, { fontSize: 16 }]}>
+            <ThemedText variant="bodySemibold" numberOfLines={1} style={[styles.name, { fontSize: 15, color: colors.text, fontWeight: '600' }]}>
               {conversation.participantName}
             </ThemedText>
-            <ThemedText variant="label" tone="muted" style={{ fontSize: 12 }}>
+            <ThemedText variant="label" tone="muted" style={{ fontSize: 12, color: colors.textMuted }}>
               {conversation.lastMessageTimestamp}
             </ThemedText>
           </View>
@@ -81,14 +84,14 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
           <View style={styles.bottomRow}>
             <ThemedText
               variant="caption"
-              tone={isHighlighted ? 'primary' : 'secondary'}
               numberOfLines={1}
               style={[
                 styles.snippet,
                 {
                   fontSize: 13,
-                  color: isHighlighted ? '#C084FC' : '#A1A1AA',
+                  color: isHighlighted ? (isDark ? '#60A5FA' : '#1E40AF') : colors.textMuted,
                   fontWeight: isHighlighted ? '600' : '400',
+                  flex: 1,
                 },
               ]}
             >
@@ -102,18 +105,16 @@ export function ConversationItem({ conversation, onPress }: ConversationItemProp
                   {
                     backgroundColor: colors.badgeBg,
                     borderRadius: 12,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
+                    minWidth: 20,
+                    height: 20,
+                    paddingHorizontal: 6,
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     marginLeft: spacing.sm,
-                    shadowColor: '#A855F7',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.6,
-                    shadowRadius: 4,
-                    elevation: 3,
                   },
                 ]}
               >
-                <Text style={[typography.label, { color: '#FFFFFF', fontSize: 10, fontWeight: '700' }]}>
+                <Text style={[typography.label, { color: '#FFFFFF', fontSize: 11, fontWeight: '700' }]}>
                   {conversation.unreadCount}
                 </Text>
               </View>
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 70,
+    minHeight: 68,
   },
   content: {
     flex: 1,
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     marginBottom: 4,
   },
   name: {

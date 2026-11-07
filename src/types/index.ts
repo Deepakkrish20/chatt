@@ -1,9 +1,7 @@
 /**
  * Core application types and domain models.
  *
- * Product Requirement:
- * The application strictly supports a maximum of 10 registered members,
- * with private one-to-one messaging only.
+ * Confidential one-to-one encrypted messaging application.
  */
 
 export const MAX_REGISTERED_MEMBERS = 10000;
